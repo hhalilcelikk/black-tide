@@ -115,7 +115,8 @@ export function createLadder(G, api, seed) {
       r.x += (r.dest[0] - r.x) / (d || 1) * step; r.z += (r.dest[1] - r.z) / (d || 1) * step;
       // within sight: put the ship in the water (never during the trailer, at most two at a time)
       const lurking = r.lurk && G.t < r.lurk.until; // a rumoured rival always gets a ship: you came looking for them
-      if (!G.attract && live.length < MAX_LIVE + (lurking ? 1 : 0) && G.t - r.beatenT > 300 && Math.hypot(r.x - p.x, r.z - p.z) < SPAWN_IN && api.isWater(r.x, r.z)) {
+      // famous captains keep their distance from a nobody: they appear once you are on the Ladder (or after five minutes)
+      if (!G.attract && (G.rank !== null || G.t > 300 || lurking) && live.length < MAX_LIVE + (lurking ? 1 : 0) && G.t - r.beatenT > 300 && Math.hypot(r.x - p.x, r.z - p.z) < SPAWN_IN && api.isWater(r.x, r.z)) {
         r.ship = api.spawnRival(r); live.push(r);
         L.sightings = L.sightings.filter(s => s.id !== r.id); // in sight now: the chart mark has done its job
       }
