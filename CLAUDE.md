@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren, ladder, fleet
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren, ladder, fleet, hunt
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -56,6 +56,12 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 - Your fleet is the flagship (role `player`) plus up to two consorts (role `consort`). Use `G.isFleet(ship)` wherever "you" means the fleet: hostility, credit for prizes and sinkings, wanted status. Keep `role === 'player'` for what only the flagship does (the helm, docking, the camera).
 - Upgrades live on each ship (`s.up`). `G.upgrades` is the flagship's. The hold is shared (`G.holdCap()` is the sum of the fleet's holds), and a lost ship takes her share of the cargo with her.
 - Consorts keep station astern, fight whoever attacks the fleet (or the flagship's target once she opens fire), and anchor off the pier head in port. If the flagship sinks, the biggest consort takes the flag.
+
+## Things to hunt
+
+- Corvin Vane's Black Wake (boss livery: black hull, red sails) waits in his zone once a tavern rumour has named it (needs a Ladder rank). `bossThink` takes the weather gauge, opens with chain shot and boards a crippled ship; being boarded and beaten strips your hold and half your gold. Beaten once, he stays beaten.
+- `src/serpent.js` is not a ship: its own seeded stream, its own ball test (`hitBall`), and `stage()` for stills. In its marked water the sky turns black and it rises; elsewhere it only rises in storms far from port.
+- A boarding ends at once if either ship starts to sink.
 
 ## Saves
 

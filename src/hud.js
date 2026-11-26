@@ -257,13 +257,20 @@ export function createHud(ctx, audio) {
 
   // ---------- chart marks ----------
   const isl = ISLANDS.map(i => { const d = document.createElement('div'); d.className = 'isl' + (i.port ? ' harbour' : ''); if (i.port) d.innerHTML = `<i class="flag ${FLAGS[i.nation]}"></i> `; d.append(i.name); el.marks.appendChild(d); return { i, d }; });
-  const marks = new Map(), sightMarks = new Map();
+  const marks = new Map(), sightMarks = new Map(), zoneMarks = {};
   function updateMarks() {
     const chart = view.mode === 'chase' && view.vh > 180;
     const op = chart ? Math.min(1, (view.vh - 180) / 120) : 0;
     el.marks.style.opacity = op;
     if (!op) return;
     for (const { i, d } of isl) { const q = project(i.x, 6, i.z); d.style.left = q.x + 'px'; d.style.top = q.y + 'px'; }
+    for (const [key, Z, on, label] of [['boss', G.boss.zone, G.boss.known && !G.boss.defeated, 'The Black Wake'], ['serpent', G.serpentZone, G.serpent.known, 'Serpent water']]) {
+      let d = zoneMarks[key];
+      if (!d) { d = zoneMarks[key] = document.createElement('div'); d.className = 'zone'; d.innerHTML = `<i></i><span>${label}</span>`; el.marks.appendChild(d); }
+      d.hidden = !on; if (!on) continue;
+      const c = project(Z.x, 0, Z.z), e = project(Z.x + Z.r, 0, Z.z), r = Math.hypot(e.x - c.x, e.y - c.y);
+      d.style.left = c.x + 'px'; d.style.top = c.y + 'px'; d.firstChild.style.width = d.firstChild.style.height = 2 * r + 'px';
+    }
     const seenS = new Set();
     for (const S of G.ladder.sightings) {
       seenS.add(S.id);
@@ -300,6 +307,13 @@ export function createHud(ctx, audio) {
     "Hangman's Cove buys powder and silver and asks no questions about where it came from.",
     'Santa Catalina ships silver north under escort. The escorts are thinner every month.',
   ];
+  // things to hunt: the boss once you are on the Ladder, then the serpent; hearing of one marks its water
+  function huntRumour() {
+    const B = G.boss, S = G.serpent;
+    if (!B.defeated && !B.known && G.rank !== null) { B.known = true; return `Corvin Vane’s Black Wake, a black frigate under red sails, hunts the water ${B.zone.name}. He takes the wind, opens with chain shot and boards the crippled. <span class="amber">Marked on your chart.</span>`; }
+    if (!S.known) { S.known = true; return `Fishermen swear a serpent rises ${G.serpentZone.name} when the sky turns black. Broadsides to its back are the only thing that hurts it. <span class="amber">Marked on your chart.</span>`; }
+    return null;
+  }
   // a sighting of a famous captain: they linger there for ten minutes, and the spot goes on your chart
   const placeName = (x, z) => { const i = ISLANDS.reduce((a, b) => Math.hypot(b.x - x, b.z - z) < Math.hypot(a.x - x, a.z - z) ? b : a); return Math.hypot(i.x - x, i.z - z) < 260 ? 'off ' + i.name : 'in open water, ' + compassName(compass(headingTo(x - i.x, z - i.z))) + ' of ' + i.name; };
   function rivalRumour() {
@@ -349,7 +363,7 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Ships for sale</h2><p class="lede">Trade-in for your ${CLASSES[p.cls].name.toLowerCase()}: ${tradeIn} gold.</p><div class="cards">` +
         ['sloop', 'schooner', 'brigantine', 'frigate'].map(k => { const C = CLASSES[k]; const own = k === p.cls; return `<div class="card"><b class="fell">${C.name}</b><span class="dim">${C.role}</span><div class="kv"><span>Guns</span><b>${C.guns}</b><span>Crew</span><b>${C.crew}</b><span>Hold</span><b>${C.hold}</b><span>Speed</span><b>${C.knots} kn</b></div><button data-buy="${k}" ${!own && G.gold + tradeIn >= C.price ? '' : 'disabled'}>${own ? 'Your ship' : fmt(C.price) + ' gold'}</button></div>`; }).join('') + `</div>`;
     } else if (s === 'tavern') {
-      const r = (G.port.rumours = G.port.rumours || [tradeTip(G.port.id), rivalRumour(), ...shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 1)].filter(Boolean));
+      const r = (G.port.rumours = G.port.rumours || [tradeTip(G.port.id), rivalRumour(), huntRumour() || shuffled(RUMOURS, mulberry32(G.port.rumourSeed))[0]].filter(Boolean));
       h = head(PD.tavern, PD.tavernLine) + purse +
         `<div class="cards"><div class="card"><b class="fell">Sign on hands</b><span class="dim">Crew ${Math.round(p.crew)}/${p.maxCrew} · 6 gold a head</span><button data-act="hire10" ${p.crew < p.maxCrew && G.gold >= 60 ? '' : 'disabled'}>Hire 10</button><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire to full</button></div></div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Rumours</h2>` + r.map(x => `<p class="rumour">${x}</p>`).join('');

@@ -1,0 +1,63 @@
+[
+ {
+  "out": "shots/still-black-wake.png",
+  "t": 20,
+  "look": "dusk",
+  "iso": {
+   "target": [
+    270,
+    2,
+    -250
+   ],
+   "az": 40,
+   "el": 26,
+   "vh": 70
+  },
+  "fleet": [
+   {
+    "id": "boss",
+    "type": "frigate",
+    "livery": "boss",
+    "x": 270,
+    "z": -250,
+    "psi": 0.5,
+    "v": 5,
+    "seed": 66
+   }
+  ]
+ },
+ {
+  "out": "shots/still-serpent.png",
+  "t": 30,
+  "look": "day",
+  "iso": {
+   "target": [
+    -276,
+    2,
+    146
+   ],
+   "az": 60,
+   "el": 30,
+   "vh": 70
+  },
+  "fleet": [
+   {
+    "id": "victim",
+    "type": "sloop",
+    "livery": "pirate",
+    "x": -262,
+    "z": 160,
+    "psi": 2.2,
+    "v": 3
+   }
+  ],
+  "serpent": {
+   "x": -285,
+   "z": 135,
+   "psi": 0.9,
+   "phase": 1.4,
+   "curl": 1.2
+  },
+  "weather": 0.5
+ }
+]

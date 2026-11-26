@@ -37,6 +37,7 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/game.js` | Simulation: wind, sailing polar, tacking and wearing, broadsides, boarding, harbours and markets, traffic between ports, the AI captain (hunt, sail to port, trade run) |
 | `src/nations.js` | Wars and alliances between the crowns, what standing means, and the ranks of a letter of marque |
 | `src/ladder.js` | The Ladder of Famous Captains: fifty rivals, the top twenty sailing the chart, places taken by beating them, titles and sightings |
+| `src/serpent.js` | The sea serpent: rises in storms and in its own water, circles, rams and dives, wounded by shot to its back |
 | `src/save.js` | Career saves: three localStorage slots written at every port, Continue, export and import as JSON |
 | `src/ports.js` | The five ports: nation, town layout and style, governor and tavern, what each market makes and needs |
 | `src/hud.js` | Pixel-plate HUD, input, port screens, chart labels, course and target markers |
@@ -51,7 +52,7 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
 | `src/template.html` | Page shell and the HUD markup and styles |
 | `tools/pixelfont.mjs` | The BT Pixel font: glyph bitmaps and the TrueType builder that `build.mjs` runs |
-| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken) and fleet (two consorts in formation, in a fight, in port, at the shipwright, and taking the flag); `tests/ports-stills.json` shoots every harbour |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken) and fleet (two consorts in formation, in a fight, in port, at the shipwright, and taking the flag) and hunt (the Black Wake and the serpent, from rumour to bounty); `tests/hunt-stills.json` shoots both; `tests/ports-stills.json` shoots every harbour |
 
 ## Credits
 

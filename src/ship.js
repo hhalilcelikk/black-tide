@@ -81,6 +81,8 @@ export const CLASSES = {
 
 export const LIVERIES = {
   pirate: { bottom: '#bcae8f', boot: '#231e1b', side: '#1f1c1b', wale: '#0f0d0c', top: '#6e1e17', trim: '#c9a24f', inner: '#7c2c21', cap: '#2a1f18', deck: '#9b7b53', deck2: '#8c6c48', mast: '#6b5034', sail: '#efe3c6', sail2: '#e2d2ae', patch: '#c7ae80', flag: 'jolly' },
+  // the Black Wake: Corvin Vane's frigate, black from waterline to rail under blood-red sails
+  boss: { bottom: '#bcae8f', boot: '#231e1b', side: '#121011', wale: '#060505', top: '#1c0d0c', trim: '#8a2a20', inner: '#7c2c21', cap: '#2a1f18', deck: '#9b7b53', deck2: '#8c6c48', mast: '#6b5034', sail: '#8e1f1a', sail2: '#741814', patch: '#5a1310', flag: 'jolly' },
   spanish: { bottom: '#cdbf9f', boot: '#2d241e', side: '#8b5b33', wale: '#2a1d14', top: '#c69a38', trim: '#7e2018', inner: '#8d3023', cap: '#3a281b', deck: '#a4845a', deck2: '#967650', mast: '#73573a', sail: '#f3ebd6', sail2: '#e8dcc0', patch: null, flag: 'burgundy' },
   english: { bottom: '#c9bc9b', boot: '#2b231e', side: '#5c3e27', wale: '#1c1410', top: '#2e4b6f', trim: '#d3ad56', inner: '#8d3023', cap: '#2d2219', deck: '#a4845a', deck2: '#967650', mast: '#6f5437', sail: '#f2ead5', sail2: '#e6dabe', patch: null, flag: 'stgeorge' },
   french: { bottom: '#c8bb9a', boot: '#2a231d', side: '#2d3954', wale: '#14161f', top: '#33416a', trim: '#d6b057', inner: '#8d3023', cap: '#2a2019', deck: '#a4845a', deck2: '#967650', mast: '#6f5437', sail: '#f4eee2', sail2: '#e8dfca', patch: null, flag: 'fleur' },

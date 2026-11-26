@@ -6,6 +6,7 @@ import { waveHeight } from './waves.js';
 import { groundAt, route, clearLine, isWater } from './nav.js';
 import { mulberry32 } from './util.js';
 import { PORTS, PORT_BY_ID, nearestPort } from './ports.js';
+import { createSerpent, SERPENT_ZONE } from './serpent.js';
 import { createLadder, STYLES as RIVAL_STYLES, titleFor } from './ladder.js';
 import { NATION_IDS, relation, atWar, friendly, MARQUE_AT, CLOSED_BELOW, BRETHREN_PRIZES, RANKS } from './nations.js';
 
@@ -102,7 +103,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   const freeName = n => { const list = NAMES[n] || NAMES.pirate, used = new Set(G.ships.map(s => s.name)); const free = list.filter(x => !used.has(x)); return pick(free.length ? free : list); };
   function spawn(o) {
     const cls = o.cls, C = CLASSES[cls], T = TYPES[cls];
-    const mesh = buildShip(cls, o.nation, U, o.seed ?? Math.floor(rnd() * 1000) + 11);
+    const mesh = buildShip(cls, o.livery || o.nation, U, o.seed ?? Math.floor(rnd() * 1000) + 11);
     scene.add(mesh.group);
     const s = {
       id: o.id || 's' + nextId++, cls, C, T, nation: o.nation, flagKind: LIVERIES[o.nation].flag, name: o.name || freeName(o.nation), role: o.role || 'merchant', mesh,
@@ -312,6 +313,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       b.x += sx; b.y += b.vy * dt; b.z += sz; b.dist += Math.hypot(sx, sz);
       let gone = false;
       if (b.dist > b.range && b.shot === 'grape') gone = true;
+      if (!gone && serpent.hitBall(b, SHOTS[b.shot].hull)) gone = true;
       for (const s of G.ships) {
         if (s === b.owner || !s.alive || s.state === 'sinking') continue;
         const dx = b.x - s.x, dz = b.z - s.z;
@@ -349,6 +351,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       } else if (s.role === 'consort') { s.role = 'lost'; say('Your consort the ' + s.name + ' is going down!', 'bad'); trimHold(s); emit('consortLost', s); }
       else {
         const by = s.threat;
+        if (s.boss) { if (isFleet(by)) bossBeaten('goes down'); G.boss.ship = null; }
         if (isFleet(by)) { credit(s, 'sink'); if (s.rival) ladder.beat(s.rival, 'goes down under your guns'); const salvage = Math.round((s.gold || 100) * 0.25); G.gold += salvage; G.fame += 3; say('Sank the ' + s.name + '. Salvage: +' + salvage + ' gold', 'good'); flash(s.name + ' sinks', '+' + salvage + ' gold in salvage'); }
       }
       return;
@@ -484,6 +487,12 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const B = G.boarding; if (!B) return;
     B.t += dt;
     const { a, b } = B;
+    // a ship that goes down mid-boarding ends it: no plunder, no prize, and the sinking stays sunk
+    if (!a.alive || !b.alive || a.state === 'sinking' || b.state === 'sinking') {
+      G.boarding = null;
+      for (const s of [a, b]) if (s.alive && s.state === 'boarding') s.state = s === b && b.prevState ? (b.prevState === 'struck' ? 'struck' : 'sail') : isFleet(s) ? 'sail' : 'engage';
+      return;
+    }
     // pull the target alongside
     const side = B.side, gap = (a.T.B + b.T.B) * 0.5 + 2.2;
     const tx = a.x + Math.sin(a.psi) * side * gap, tz = a.z + Math.cos(a.psi) * side * gap;
@@ -509,10 +518,19 @@ export function createGame({ scene, U, fx, seed = 7 }) {
           G.loot = { ship: b, gold: b.gold, goods, lost: lossA, t: G.t };
           G.prizes++; G.fame += 8 + Math.round(b.gold / 40);
           credit(b, 'prize');
+          if (b.boss) bossBeaten('is your prize');
           if (b.rival) ladder.beat(b.rival, 'is your prize');
           ladder.rerank(false);
           say('Took the ' + NATIONS[b.nation].adj + ' ' + b.C.name.toLowerCase() + ' ' + b.name + '. Lost ' + lossA + ' men.', 'good');
           emit('won', b);
+        } else if (b.role === 'player') { // boarded and beaten: they strip the hold and the purse, and cast you adrift
+          const lostGold = Math.floor(G.gold / 2); G.gold -= lostGold;
+          for (const g of GOODS) G.cargo[g.id] = 0; G.stolen = {};
+          b.state = 'sail'; applyColours(b); b.crew = Math.max(4, b.crew);
+          say('The ' + a.name + '’s crew strip your hold and take ' + lostGold + ' gold, then cast you adrift.', 'bad');
+          flash('Boarded and plundered', 'You lose your cargo and ' + lostGold + ' gold', 5);
+          if (a.boss) { a.gauge = false; a.state = 'sail'; a.sailSet = 1; a.path = route(a.x, a.z, BOSS_ZONE.x, BOSS_ZONE.z); a.wp = 0; a.leftT = G.t; }
+          emit('plundered', a);
         } else b.cargo = {};
       } else {
         b.state = b.prevState === 'struck' ? 'sail' : b.prevState || 'flee'; b.mesh.setFlag(LIVERIES[b.nation].flag);
@@ -591,6 +609,61 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     return (s.threat === P || near) && P.C.guns <= s.C.guns * RIVAL_STYLES[s.style].duel;
   };
   const ladder = createLadder(G, { say, flash: (t, s, d) => flash(t, s, d), emit, remove, isWater: (x, z) => isWater(x, z, -6), spawnRival }, seed);
+
+  // ---------------- things to hunt: the serpent and the boss ----------------
+  const serpent = createSerpent({ scene, U, fx, G, seed, api: {
+    say, flash: (t, s, d) => flash(t, s, d), emit,
+    kill(owner) {
+      say('The serpent thrashes, rolls and sinks. The harbour boards pay a bounty for its head.', 'good');
+      if (isFleet(owner)) { G.gold += 2000; G.fame += 50; ladder.rerank(false); flash('The serpent is dead', '+2000 gold bounty · +50 fame', 6); }
+      emit('serpentKilled', owner);
+    },
+  } });
+  G.serpentZone = SERPENT_ZONE;
+  // Corvin Vane in the Black Wake: a black frigate under red sails. He takes the weather gauge, opens with
+  // chain shot, and boards when you are crippled. A tavern rumour names his water; he waits there.
+  const BOSS_ZONE = { x: 270, z: -250, r: 170, name: 'north-east of The Teeth' };
+  G.boss = { known: false, defeated: false, zone: BOSS_ZONE, ship: null };
+  function spawnBoss() {
+    const p = G.player, a = Math.atan2(BOSS_ZONE.z - p.z, BOSS_ZONE.x - p.x);
+    const x = p.x + Math.cos(a) * 380, z = p.z + Math.sin(a) * 380;
+    const s = spawn({ cls: 'frigate', nation: 'pirate', livery: 'boss', role: 'pirate', name: 'Black Wake', x, z, psi: headingTo(p.x - x, p.z - z), v: 4, gold: 2500, cargo: { silver: 20, spices: 12 }, morale: 1.5, seed: 66 });
+    s.boss = true; s.maxHull = Math.round(s.C.hull * 1.6); s.hull = s.maxHull; s.maxCrew = Math.round(s.C.crew * 1.3); s.crew = s.maxCrew;
+    G.boss.ship = s;
+    say('Red sails on the horizon: the Black Wake, Corvin Vane’s frigate.', 'warn'); flash('The Black Wake', 'Corvin Vane takes the wind, then boards the crippled', 5);
+    emit('boss', s);
+  }
+  function bossThink(s) {
+    const t = G.player, d = Math.hypot(t.x - s.x, t.z - s.z);
+    s.state = 'engage'; s.target = t; s.sailSet = 1;
+    if (t.state === 'docked' || d > 900) { s.state = 'sail'; s.target = null; if (followPath(s, 40) || !s.path) { s.path = route(s.x, s.z, BOSS_ZONE.x + (rnd() - 0.5) * 200, BOSS_ZONE.z + (rnd() - 0.5) * 200); s.wp = 0; } return; }
+    // crippled: lay her alongside and board
+    if (t.sails < t.maxSails * 0.45 || t.hull < t.maxHull * 0.4 || t.crew < t.maxCrew * 0.45) {
+      s.bossPhase = 'board';
+      if (G.canBoard(s, t)) G.board(s, t); else engage(s, t, 'board');
+      return;
+    }
+    // first the weather gauge: get upwind of her before the guns speak
+    const wx = Math.cos(G.wind.from), wz = -Math.sin(G.wind.from), up = (s.x - t.x) * wx + (s.z - t.z) * wz;
+    if (!s.gauge && (up < 60 || d > 260)) {
+      s.bossPhase = 'gauge';
+      const gx = t.x + wx * 170, gz = t.z + wz * 170;
+      steerTo(s, avoid(s, sailable(s, headingTo(gx - s.x, gz - s.z))));
+      if (up > 60 && d < 260) s.gauge = true;
+      return;
+    }
+    s.gauge = true; s.bossPhase = 'guns';
+    s.shot = t.sails > t.maxSails * 0.55 ? 'chain' : 'round'; // chain first, to cripple her rig
+    engage(s, t);
+  }
+  function bossBeaten(how) {
+    if (G.boss.defeated) return;
+    G.boss.defeated = true; G.gold += 3000; G.fame += 60; ladder.rerank(false);
+    say('Corvin Vane is beaten: the Black Wake ' + how + '. Every governor pays the bounty on his head.', 'good');
+    flash('Corvin Vane is beaten', '+3000 gold bounty · +60 fame', 6);
+    emit('bossBeaten', how);
+  }
+  G.bossThink = bossThink;
 
   // ---------------- nations ----------------
   const clampSt = n => { G.standing[n] = Math.max(-30, Math.min(30, G.standing[n] || 0)); };
@@ -783,6 +856,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       if (G.t - s.struckT > 50 && !(G.boarding)) { s.state = 'flee'; s.sailSet = 1; s.mesh.setFlag(LIVERIES[s.nation].flag); }
       return;
     }
+    if (s.boss) { bossThink(s); return; }
     // who's around
     let foe = null, fd = 1e9;
     for (const o of G.ships) {
@@ -1089,6 +1163,15 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     stepWind(dt);
     stepMarkets(dt);
     ladder.step(dt);
+    serpent.step(dt);
+    // the boss waits in his water: he comes out when you sail into it, once you have heard of him
+    G.bossCheck = (G.bossCheck || 0) - dt;
+    if (G.bossCheck <= 0) {
+      G.bossCheck = 2;
+      const B = G.boss, P = G.player;
+      if (B.ship && !B.ship.alive) B.ship = null;
+      if (B.known && !B.defeated && !B.ship && !G.attract && !G.docked && Math.hypot(P.x - BOSS_ZONE.x, P.z - BOSS_ZONE.z) < BOSS_ZONE.r + 150) spawnBoss();
+    }
     const P = G.player;
     for (const s of G.ships) { s.think -= dt; if (s.role !== 'player' && s.role !== 'lost' && s.think <= 0 && s.state !== 'boarding' && s.state !== 'sinking') { s.think = 0.35; if (s.role === 'consort') consortThink(s); else npcThink(s); } }
     if (G.autopilot && P.state !== 'sinking') { G.aiThink = (G.aiThink || 0) - dt; if (G.aiThink <= 0 || G.docking) { G.aiThink = 0.3; captain(dt * 0 + 0.3); } }
@@ -1118,7 +1201,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       emit('flagship', n); emit('dock', n);
     }
   };
-  G.placeAll = () => { for (const s of G.ships) place(s); };
+  G.placeAll = () => { for (const s of G.ships) place(s); serpent.place(); };
 
   // ---------------- saves ----------------
   // A career as plain data: everything that carries over (the flagship, purse, hold, upgrades, standing,
@@ -1131,7 +1214,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       t: G.t, phase: G.phase, weather: G.weather, weatherTarget: G.weatherTarget, nextWeather: G.nextWeather, windBase: G.windBase,
       gold: G.gold, cargo: { ...G.cargo }, fame: G.fame, prizes: G.prizes, rank: G.rank, standing: { ...G.standing }, upgrades: { ...G.upgrades },
       tradeProfit: G.tradeProfit, port: G.dockPort.id, rng: rnd.getState(),
-      commission: G.commission && { ...G.commission }, brethren: G.brethren, stolen: { ...G.stolen }, ladder: ladder.snapshot(),
+      commission: G.commission && { ...G.commission }, brethren: G.brethren, stolen: { ...G.stolen }, ladder: ladder.snapshot(), boss: { known: G.boss.known, defeated: G.boss.defeated }, serpent: serpent.snapshot(),
       markets: Object.fromEntries(Object.entries(G.markets).map(([id, m]) => [id, Object.fromEntries(Object.entries(m).map(([g, v]) => [g, { mod: v.mod, k: v.k }]))])),
       ship: { cls: p.cls, name: p.name, hull: p.hull, sails: p.sails, crew: p.crew, maxHull: p.maxHull, morale: p.morale, up: { ...p.up } },
       consorts: G.consorts().map(s => ({ cls: s.cls, name: s.name, nation: s.nation, hull: s.hull, sails: s.sails, crew: s.crew, maxHull: s.maxHull, up: { ...s.up } })),
@@ -1159,6 +1242,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     G.ai = { phase: 'look', target: null, msg: 'Looking for a prize', t: 0, portT: 0 };
     rnd.setState(d.rng);
     ladder.restore(d.ladder); ladder.rerank(true);
+    G.boss.known = !!(d.boss && d.boss.known); G.boss.defeated = !!(d.boss && d.boss.defeated); G.boss.ship = null; G.bossCheck = 0;
+    serpent.restore(d.serpent);
     const P = PORT_BY_ID[d.port]; G.dockPort = P;
     const m = G.moor({ T: TYPES[d.ship.cls] });
     const n = spawn({ id: 'player', cls: d.ship.cls, nation: 'pirate', role: 'player', name: d.ship.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });

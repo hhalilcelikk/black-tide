@@ -301,6 +301,7 @@ if (capture) {
       for (const f of (o.fires || [])) fx.addFire(pool[f.ship] ? pool[f.ship].mesh.group : scene, new V3(...f.at), f.size, 11, false);
       G.placeAll();
       for (const b of (o.broadsides || [])) for (const age of b.ages) fx.broadside(pool[b.ship].mesh, b.side, b.target ? pool[b.target].mesh : null, o.t - age);
+      if (o.serpent) G.serpent.stage(o.serpent); else G.serpent.hide();
       if (o.bolt) { fx.bolt.visible = true; fx.bolt.position.set(o.bolt[0], 0, o.bolt[1]); fx.bolt.rotation.y = o.bolt[2] || 0; } else fx.bolt.visible = false;
       state.lightning = o.lightning || 0;
       D.uBump.value = o.bump ?? 0.05;
