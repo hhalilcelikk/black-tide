@@ -11,6 +11,12 @@
   "equals": []
  },
  {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (at sea (attract, target in view))"
+ },
+ {
   "do": "eval",
   "js": "window.__bt.G.rank = 5, window.__bt.G.rank"
  },
@@ -46,6 +52,12 @@
   "equals": []
  },
  {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: menu)"
+ },
+ {
   "do": "eval",
   "js": "document.querySelector('[data-port=market]') && document.querySelector('[data-port=market]').click()"
  },
@@ -54,6 +66,12 @@
   "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
   "msg": "no HUD plates overlap in port: market",
   "equals": []
+ },
+ {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: market)"
  },
  {
   "do": "eval",
@@ -66,6 +84,12 @@
   "equals": []
  },
  {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: shipwright)"
+ },
+ {
   "do": "eval",
   "js": "document.querySelector('[data-port=tavern]') && document.querySelector('[data-port=tavern]').click()"
  },
@@ -74,6 +98,12 @@
   "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
   "msg": "no HUD plates overlap in port: tavern",
   "equals": []
+ },
+ {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: tavern)"
  },
  {
   "do": "eval",
@@ -86,6 +116,12 @@
   "equals": []
  },
  {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: governor)"
+ },
+ {
   "do": "eval",
   "js": "document.querySelector('[data-port=board]') && document.querySelector('[data-port=board]').click()"
  },
@@ -94,6 +130,12 @@
   "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
   "msg": "no HUD plates overlap in port: board",
   "equals": []
+ },
+ {
+  "do": "expect",
+  "js": "[...document.querySelectorAll('#ui button')].filter(b => b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden' && b.scrollWidth > b.clientWidth + 1).map(b => b.id || b.textContent.trim())",
+  "equals": [],
+  "msg": "no button's text overflows its box (in port: board)"
  },
  {
   "do": "shot",

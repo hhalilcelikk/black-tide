@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -39,6 +39,12 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 - `heightAt` skips blobs beyond their reach, using a tile index, so it stays cheap. One 1280² height grid (`heightGrid()`) feeds both the ocean shallows texture and the nav grid.
 - Lights are pooled. A lamp, brazier or torch is a spec in `world.lights`, and main.js lights the 8 nearest with a fixed pool of PointLights. Never add a PointLight per object: the light count must stay fixed or every shader recompiles.
 - Markets keep a per-port price factor `k` that trades move and time restores. Trade runs, traffic and navies all read the same port list.
+
+## Saves
+
+- A career is `G.snapshot()` (plain JSON) and comes back with `G.restore(data, slot)`. `src/save.js` writes it to the `blacktide.save.1`–`3` slots in localStorage on every docking and departure, wraps every storage call in try/catch, and handles export and import. The AI captain's trailer is never saved.
+- **Any new career state (fleet, contracts, rivals, standing, flags) must go into `snapshot` and `restore` in the same change**, with a `tests/save.json` check that it survives a reload. Bump `v` and keep loading older saves when the format changes.
+- A save carries the sim's RNG position (`rnd.getState()`), so a career resumes on the same random stream. Traffic is not saved: the sea refills around you.
 
 ## HUD layout
 

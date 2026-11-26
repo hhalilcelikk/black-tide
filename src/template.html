@@ -63,6 +63,9 @@ kbd{font:inherit;color:var(--amber)}
 .topc .bar{margin-top:calc(var(--px)*4)}
 #dayBar{background:linear-gradient(90deg,#8fc7ff,#e8b04a);}
 .captain{top:calc(var(--px)*6);right:calc(var(--px)*6);width:calc(var(--px)*128)}
+.captain #continueBtn,.captain #savesBtn{margin-bottom:calc(var(--px)*3)}
+.captain #continueBtn{white-space:normal;line-height:1.3}.captain #continueBtn .sub{display:block;font-size:calc(var(--px)*8);color:#5a3a12}
+.slot{display:grid;grid-template-columns:1fr auto;gap:calc(var(--px)*4);align-items:center}
 .captain #capLine{margin:calc(var(--px)*4) 0;line-height:1.25}
 .orders{display:grid;gap:calc(var(--px)*2);margin:calc(var(--px)*3) 0}
 .orders button{text-align:left}
@@ -143,7 +146,7 @@ kbd{font:inherit;color:var(--amber)}
 .tbl tr.you td{color:var(--amber)}
 .tbl .l{text-align:left}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--px)*100),1fr));gap:calc(var(--px)*4);margin-top:calc(var(--px)*4)}
-.card{background:var(--ink2);padding:calc(var(--px)*4);box-shadow:inset 0 0 0 var(--px) #3d3122;display:grid;gap:calc(var(--px)*3)}
+.card{background:var(--ink2);padding:calc(var(--px)*4);box-shadow:inset 0 0 0 var(--px) #3d3122;display:grid;gap:calc(var(--px)*3);align-content:start}
 .card .fell{font-size:calc(var(--px)*12);color:#f4e4bd}
 .kv{display:grid;grid-template-columns:1fr auto;gap:calc(var(--px)*2) calc(var(--px)*6)}
 .summary{display:flex;gap:calc(var(--px)*8);margin-bottom:calc(var(--px)*5);flex-wrap:wrap}
@@ -186,6 +189,8 @@ kbd{font:inherit;color:var(--amber)}
       <button data-order="port">Sail to the nearest port</button>
       <button data-order="trade">Trade run: buy cheap, sell dear</button>
     </div>
+    <button id="continueBtn" class="btn go" hidden>Continue</button>
+    <button id="savesBtn" class="btn" hidden>Saved careers</button>
     <button id="helmBtn" class="btn go">Take the helm</button>
   </div>
 
@@ -247,6 +252,12 @@ kbd{font:inherit;color:var(--amber)}
     </div>
   </div>
 
+  <div class="plate modal" id="saves" hidden role="dialog" aria-labelledby="savesH">
+    <h2 id="savesH">Saved careers</h2>
+    <div id="saveList" class="acts"></div>
+    <div class="acts"><button id="savesClose">Back to sea</button></div>
+  </div>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
   <div class="plate modal help" id="help" hidden role="dialog" aria-labelledby="helpH">
     <h2 id="helpH">At the helm</h2>
     <dl>

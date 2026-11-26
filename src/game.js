@@ -64,7 +64,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   const emit = (ev, data) => { for (const f of listeners[ev] || []) f(data); };
 
   const G = {
-    t: 0, phase: 0.6, daySpeed: 1 / 720, weather: 0, weatherTarget: 0, nextWeather: 300, paused: false, timeScale: 1,
+    seed, slot: null, t: 0, phase: 0.6, daySpeed: 1 / 720, weather: 0, weatherTarget: 0, nextWeather: 300, paused: false, timeScale: 1,
     wind: { from: Math.PI / 2, speed: 1.0, gust: 0 }, windBase: Math.PI / 2,
     ships: [], balls: [], player: null, selected: null, log: [], banner: null,
     gold: 350, cargo: Object.fromEntries(GOODS.map(g => [g.id, 0])), fame: 0, prizes: 0, rank: null,
@@ -115,6 +115,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.spawn = spawn;
   function remove(s) {
     s.alive = false;
+    fx.dropFires(s.fires); s.fires = [];
     scene.remove(s.mesh.group);
     s.mesh.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.isShaderMaterial && o.material.uniforms.tMap) o.material.dispose(); });
     const i = G.ships.indexOf(s); if (i >= 0) G.ships.splice(i, 1);
@@ -940,6 +941,52 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     }
   };
   G.placeAll = () => { for (const s of G.ships) place(s); };
+
+  // ---------------- saves ----------------
+  // A career as plain data: everything that carries over (the flagship, purse, hold, upgrades, standing,
+  // fame and rank, the time of day and weather, every market, and the random stream's exact position).
+  // Traffic is not saved: the sea refills around you. You always resume moored in the port you saved at.
+  G.snapshot = () => {
+    const p = G.player;
+    return {
+      v: 1, game: 'black-tide', seed: G.seed, slot: G.slot, savedAt: Date.now(), // savedAt is for the menu only, never the sim
+      t: G.t, phase: G.phase, weather: G.weather, weatherTarget: G.weatherTarget, nextWeather: G.nextWeather, windBase: G.windBase,
+      gold: G.gold, cargo: { ...G.cargo }, fame: G.fame, prizes: G.prizes, rank: G.rank, standing: { ...G.standing }, upgrades: { ...G.upgrades },
+      tradeProfit: G.tradeProfit, port: G.dockPort.id, rng: rnd.getState(),
+      markets: Object.fromEntries(Object.entries(G.markets).map(([id, m]) => [id, Object.fromEntries(Object.entries(m).map(([g, v]) => [g, { mod: v.mod, k: v.k }]))])),
+      ship: { cls: p.cls, name: p.name, hull: p.hull, sails: p.sails, crew: p.crew, maxHull: p.maxHull, morale: p.morale },
+    };
+  };
+  // throws on anything that is not a Black Tide save, before touching the game
+  G.validate = d => {
+    const ok = d && d.game === 'black-tide' && d.v === 1 && PORT_BY_ID[d.port] && CLASSES[d.ship && d.ship.cls] && Number.isFinite(d.gold) && Number.isFinite(d.t) && Number.isFinite(d.rng);
+    if (!ok) throw new Error('That file is not a Black Tide save.');
+    return d;
+  };
+  // slot: which save slot this career writes to from now on (decided by the caller before the 'dock' autosave)
+  G.restore = (d, slot = d.slot ?? null) => {
+    G.validate(d);
+    for (const s of [...G.ships]) remove(s);
+    G.balls.length = 0; fx.clear();
+    Object.assign(G, {
+      t: d.t, phase: d.phase, weather: d.weather, weatherTarget: d.weatherTarget, nextWeather: d.nextWeather, windBase: d.windBase,
+      gold: d.gold, fame: d.fame, prizes: d.prizes, rank: d.rank, slot, tradeProfit: d.tradeProfit || 0,
+      cargo: Object.fromEntries(GOODS.map(g => [g.id, d.cargo[g.id] || 0])), standing: { ...G.standing, ...d.standing }, upgrades: { hull: 0, sails: 0, guns: 0, ...d.upgrades },
+      attract: false, autopilot: false, order: 'hunt', boarding: null, loot: null, sinking: null, docking: false, course: null, selected: null, banner: null, autoDock: false, spawnT: 0,
+    });
+    for (const id in d.markets) if (G.markets[id]) for (const g in d.markets[id]) if (G.markets[id][g]) Object.assign(G.markets[id][g], d.markets[id][g]);
+    G.ai = { phase: 'look', target: null, msg: 'Looking for a prize', t: 0, portT: 0 };
+    rnd.setState(d.rng);
+    const P = PORT_BY_ID[d.port]; G.dockPort = P;
+    const m = G.moor({ T: TYPES[d.ship.cls] });
+    const n = spawn({ id: 'player', cls: d.ship.cls, nation: 'pirate', role: 'player', name: d.ship.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
+    n.maxHull = d.ship.maxHull || n.maxHull; n.hull = Math.min(n.maxHull, d.ship.hull); n.sails = Math.min(n.maxSails, d.ship.sails); n.crew = Math.min(n.maxCrew, d.ship.crew); n.morale = d.ship.morale ?? 1;
+    n.state = 'docked'; n.mesh.setFurled(true);
+    G.player = n; G.docked = true; G.port = openPort(P);
+    say('Welcome back, captain. The ' + n.name + ' is moored at ' + P.name + '.', 'good');
+    G.placeAll();
+    emit('flagship', n); emit('dock', n); emit('restored', d);
+  };
 
   // ---------------- attract mode: a staged first minute ----------------
   function populateAttract(dt) {

@@ -11,6 +11,9 @@
 #   {"do":"key","key":"d","down":true}        press, or hold/release with down/up
 #   {"do":"click","x":..,"y":..}              mouse click
 #   {"do":"wait","ms":500}                    wall-clock wait (avoid: it is not on the sim clock)
+#   {"do":"reload"}                           reload the page (localStorage survives, as in a real browser)
+#   {"do":"download","click":"css","out":"p"} click an element and save the file it downloads
+#   {"do":"upload","input":"css","file":"p"}  give a file to an <input type=file>
 # Exit code: 1 on page errors, a missing __bt, or a failed expect.
 import asyncio, sys, json, time
 from playwright.async_api import async_playwright
@@ -81,6 +84,14 @@ async def main():
                 if not ok and s.get('required', True): failed.append('until ' + s['js'])
             elif d == 'wait':
                 await pg.wait_for_timeout(s['ms'])
+            elif d == 'reload':
+                await pg.reload(); await pg.wait_for_function('window.__bt', timeout=60000); print('reloaded')
+            elif d == 'download':
+                async with pg.expect_download() as dl:
+                    await pg.click(s['click'])
+                f = await dl.value; out = out_path(s['out']); await f.save_as(out); print('downloaded', f.suggested_filename, '->', out)
+            elif d == 'upload':
+                await pg.set_input_files(s['input'], out_path(s['file'])); print('uploaded', s['file'])
         print('\n'.join(msgs[:40]))
         await b.close()
     if failed:

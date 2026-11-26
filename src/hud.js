@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CLASSES, NATIONS, TYPES } from './ship.js';
 import { GOODS, SHOTS, ISLANDS, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
 import { PORTS, PORT_BY_ID } from './ports.js';
+import { autosave, listSaves, newestSave, loadSlot, exportCareer, importCareer } from './save.js';
 import { phaseName } from './looks.js';
 import { isWater } from './nav.js';
 import { mulberry32, shuffled } from './util.js';
@@ -37,7 +38,7 @@ export function createHud(ctx, audio) {
   const { G, view } = ctx;
   for (const el of document.querySelectorAll('.ico[data-i]')) el.innerHTML = svg(el.dataset.i);
   const el = {};
-  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
+  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'continueBtn', 'savesBtn', 'saves', 'saveList', 'savesClose', 'importFile', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
   const txt = (e, s) => { if (e.textContent !== s) e.textContent = s; };
   const pct = (e, k) => { const v = (Math.max(0, Math.min(1, k)) * 100).toFixed(1) + '%'; if (e.style.width !== v) e.style.width = v; };
 
@@ -179,9 +180,36 @@ export function createHud(ctx, audio) {
   for (const b of document.querySelectorAll('[data-loot]')) b.addEventListener('click', () => G.takeLoot(b.dataset.loot));
   for (const b of document.querySelectorAll('[data-port]')) b.addEventListener('click', () => { if (b.dataset.port === 'leave') { G.leavePort(); return; } if (G.port) { G.port.screen = b.dataset.port; renderPort(); } });
 
+  // ---------- saves ----------
+  let saves = { newest: newestSave(), count: listSaves().filter(s => s.d).length }; // re-read only when a save changes
+  const refreshSaves = () => { saves = { newest: newestSave(), count: listSaves().filter(s => s.d).length }; };
+  const afterLoad = () => { el.saves.hidden = true; el.help.hidden = true; refreshSaves(); refreshCaptain(); };
+  const when = ms => { try { return new Date(ms).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+  function showSaves() {
+    el.saveList.innerHTML = listSaves().map(({ slot, d }) => d
+      ? `<div class="slot"><span><b>Slot ${slot} · ${d.ship.name}</b><br><span class="dim">${CLASSES[d.ship.cls].name} at ${PORT_BY_ID[d.port].name} · ${fmt(Math.round(d.gold))} gold · ${d.rank ? '#' + d.rank : 'unranked'} · ${when(d.savedAt)}</span></span><button data-slot="${slot}">Load</button></div>`
+      : `<div class="slot"><span class="dim">Slot ${slot} · empty</span><span></span></div>`).join('');
+    for (const b of el.saveList.querySelectorAll('[data-slot]')) b.addEventListener('click', () => { audio.unlock(); loadSlot(G, +b.dataset.slot); afterLoad(); });
+    el.saves.hidden = false;
+  }
+  el.continueBtn.addEventListener('click', () => { audio.unlock(); if (saves.newest && loadSlot(G, saves.newest.slot)) afterLoad(); });
+  el.savesBtn.addEventListener('click', showSaves);
+  el.savesClose.addEventListener('click', () => { el.saves.hidden = true; });
+  el.importFile.addEventListener('change', async () => {
+    const f = el.importFile.files[0]; el.importFile.value = ''; if (!f) return;
+    const err = await importCareer(G, f);
+    if (err) { G.say(err, 'warn'); G.flash('Import failed', err, 4); } else { afterLoad(); G.flash('Career imported', 'Saved to slot ' + G.slot, 4); }
+  });
+  G.on('dock', () => { if (autosave(G)) { refreshSaves(); G.say('Career saved to slot ' + G.slot + '.'); } });
+  G.on('undock', () => { if (autosave(G)) refreshSaves(); });
+
   function refreshCaptain() {
     const A = G.autopilot;
-    txt(el.capTitle, A ? (G.attract ? 'AI captain' : 'AI captain · ' + (G.order === 'hunt' ? 'hunting' : 'to port')) : 'You have the helm');
+    // the trailer offers to pick up a saved career; once you sail, the plate is yours
+    el.continueBtn.hidden = !(G.attract && saves.newest);
+    el.savesBtn.hidden = !(G.attract && saves.count > 1);
+    if (saves.newest) { const h = 'Continue<span class="sub">' + saves.newest.d.ship.name + ' at ' + PORT_BY_ID[saves.newest.d.port].name + '</span>'; if (el.continueBtn._h !== h) { el.continueBtn.innerHTML = h; el.continueBtn._h = h; } }
+    txt(el.capTitle, A ? (G.attract ? 'AI captain' : 'AI captain · ' + (G.order === 'hunt' ? 'hunting' : G.order === 'trade' ? 'trading' : 'to port')) : 'You have the helm');
     txt(el.helmBtn, A ? 'Take the helm' : el.orders.hidden ? 'Hand to AI captain (H)' : 'Keep the helm');
     el.helmBtn.classList.toggle('go', A);
   }
@@ -283,6 +311,7 @@ export function createHud(ctx, audio) {
           <div class="card"><b class="fell">Sell the whole hold</b><span class="dim">At this port's prices</span><button data-act="sellall" ${G.holdUsed() ? '' : 'disabled'}>Sell all</button></div>
           <div class="card"><b class="fell">Repair the ${p.name}</b><span class="dim">${rc ? rc + ' gold for hull and sails' : 'She is sound'}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>Repair</button></div>
           <div class="card"><b class="fell">Hire to full crew</b><span class="dim">${p.maxCrew - Math.round(p.crew)} berths · 6 gold a head</span><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire</button></div>
+          <div class="card"><b class="fell">Captain's log</b><span class="dim">${G.slot ? 'Saved to slot ' + G.slot + ' at every port' : 'Saved at every port once you have the helm'}</span><button data-act="export">Export career</button><button data-act="import">Import career</button></div>
         </div>`;
     } else if (s === 'market') {
       const P = G.port.prices;
@@ -319,7 +348,7 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Bounties</h2><p class="rumour">500 gold: the pirate sloop Merry Widow, last seen off Gull Cay.</p><p class="rumour">250 gold: news of the Spanish galleon San Telmo's route.</p>`;
     }
     body.innerHTML = h;
-    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.player.maxCrew - Math.round(G.player.crew)); renderPort(); });
+    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.player.maxCrew - Math.round(G.player.crew)); if (a === 'export') G.say('Exported the career to ' + exportCareer(G) + '.'); if (a === 'import') { el.importFile.click(); return; } renderPort(); });
     for (const b of body.querySelectorAll('[data-trade]')) b.addEventListener('click', () => { const [id, n] = b.dataset.trade.split(':'); G.trade(id, +n); renderPort(); });
     for (const b of body.querySelectorAll('[data-up]')) b.addEventListener('click', () => { G.upgrade(b.dataset.up); renderPort(); });
     for (const b of body.querySelectorAll('[data-buy]')) b.addEventListener('click', () => { G.buyShip(b.dataset.buy); renderPort(); });

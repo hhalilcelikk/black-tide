@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && P=.venv/bin/python && F='test&skip=attract' && $P play.py tests/smoke.json 1280 720 && $P play.py tests/port.json 1280 720 && $P play.py tests/layout.json 1280 720 && $P play.py tests/layout.json 1024 768 && $P play.py tests/layout.json 1920 1080 && $P play.py tests/trade.json 1280 720 $F && $P play.py tests/traderun.json 1280 720 $F && $P play.py tests/traffic.json 1600 900 $F"
+    "test": "node build.mjs && P=.venv/bin/python && F='test&skip=attract' && $P play.py tests/smoke.json 1280 720 && $P play.py tests/port.json 1280 720 && $P play.py tests/layout.json 1280 720 && $P play.py tests/layout.json 1024 768 && $P play.py tests/layout.json 1920 1080 && $P play.py tests/trade.json 1280 720 $F && $P play.py tests/traderun.json 1280 720 $F && $P play.py tests/traffic.json 1600 900 $F && $P play.py tests/save.json 1280 720"
   },
   "dependencies": {
     "@fontsource/im-fell-english": "^5.3.0",
