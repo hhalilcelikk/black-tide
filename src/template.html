@@ -195,7 +195,8 @@ kbd{font:inherit;color:var(--amber)}
   </div>
 
   <div class="plate ship" id="shipPanel">
-    <div class="row"><b id="shipName" class="amber">Black Tide</b><span class="dim" id="shipCls">Brigantine</span></div>
+    <div class="row" style="white-space:nowrap"><i class="flag jolly" id="shipFlag"></i><b id="shipName" class="amber">Black Tide</b><span class="dim" id="shipCls">Brigantine</span></div>
+    <div class="dim" id="shipRank" style="margin-top:calc(var(--px)*2)" hidden></div>
     <div class="meter"><span>Hull</span><div class="bar"><i id="hullBar"></i></div><b id="hullN">0</b></div>
     <div class="meter"><span>Sails</span><div class="bar"><i id="sailBar"></i></div><b id="sailN">0</b></div>
     <div class="meter"><span>Crew</span><div class="bar"><i id="crewBar"></i></div><b id="crewN">0</b></div>

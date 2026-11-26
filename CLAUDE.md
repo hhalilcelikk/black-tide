@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -39,6 +39,12 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 - `heightAt` skips blobs beyond their reach, using a tile index, so it stays cheap. One 1280² height grid (`heightGrid()`) feeds both the ocean shallows texture and the nav grid.
 - Lights are pooled. A lamp, brazier or torch is a spec in `world.lights`, and main.js lights the 8 nearest with a fixed pool of PointLights. Never add a PointLight per object: the light count must stay fixed or every shader recompiles.
 - Markets keep a per-port price factor `k` that trades move and time restores. Trade runs, traffic and navies all read the same port list.
+
+## Nations
+
+- `src/nations.js` holds the wars and alliances, the standing thresholds (letter of marque at 8, harbour closed below -8) and the commission ranks. `G.standing` covers the four crowns plus `pirate` for the Brethren.
+- `credit()` in game.js is the single place a prize or a sinking changes standing and pays a commission. `G.legal(ship)` decides what is a lawful prize, `G.welcome(port)` which harbours let you in, and `G.colours()` the flag you fly. Navies and pirates read these in `npcThink`, and the AI captain and trade planner only use welcoming ports.
+- A new piece of politics goes through these functions rather than special cases in the AI or the HUD, and into the save.
 
 ## Saves
 

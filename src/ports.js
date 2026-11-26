@@ -19,7 +19,7 @@ const DEFS = [
     blurb: 'English colony on Isla Rosalind', dock: { x: -40, zIn: -125 },
     makes: ['sugar', 'rum', 'timber'], needs: ['cloth', 'tobacco', 'spices'],
     harbour: 'Gulls on the warehouses, tar on the air. A clerk with a ledger waits at the foot of the pier.',
-    govLine: '“Letters of marque are for captains with a name. Come back when the harbour board knows yours.”',
+    govLine: '“England needs captains who trouble Spain. Earn the Crown’s trust and I will put it in writing.”',
     tavern: 'The Drowned Lantern', tavernLine: 'Low beams, loud dice, a fiddler who knows four tunes. Every one of them is a shanty.',
   },
   {

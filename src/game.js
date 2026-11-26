@@ -6,6 +6,7 @@ import { waveHeight } from './waves.js';
 import { groundAt, route, clearLine, isWater } from './nav.js';
 import { mulberry32 } from './util.js';
 import { PORTS, PORT_BY_ID, nearestPort } from './ports.js';
+import { NATION_IDS, relation, atWar, friendly, MARQUE_AT, CLOSED_BELOW, BRETHREN_PRIZES, RANKS } from './nations.js';
 
 const TAU = Math.PI * 2, D2R = Math.PI / 180, KN = 0.75; // game metres per second per knot
 export const wrap = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
@@ -69,7 +70,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     ships: [], balls: [], player: null, selected: null, log: [], banner: null,
     gold: 350, cargo: Object.fromEntries(GOODS.map(g => [g.id, 0])), fame: 0, prizes: 0, rank: null,
     autopilot: true, order: 'hunt', attract: true, docked: false, port: null,
-    boarding: null, loot: null, course: null, sinking: null, standing: { english: 0, spanish: -10, french: 0, dutch: 0 },
+    boarding: null, loot: null, course: null, sinking: null, standing: { english: 0, spanish: -10, french: 0, dutch: 0, pirate: 0 }, commission: null, brethren: false, stolen: {},
     upgrades: { hull: 0, sails: 0, guns: 0 }, tutorial: true,
     on(ev, f) { (listeners[ev] || (listeners[ev] = [])).push(f); },
   };
@@ -126,7 +127,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   const hostile = (a, b) => {
     if (a === b || !b.alive) return false;
     if (a.role === 'player') return b.role !== 'player';
-    if (b.role === 'player') return a.role === 'navy' ? true : a.role === 'pirate' ? true : (a.threat === b);
+    if (b.role === 'player') return a.role === 'navy' ? true : a.role === 'pirate' ? !G.brethren : (a.threat === b);
     if (a.role === 'pirate') return b.role !== 'pirate';
     if (b.role === 'pirate') return a.role === 'navy';
     return a.threat === b;
@@ -237,7 +238,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.sideTo = sideTo;
   function fire(s, side, aimAt) {
     if (s.reload[side] > 0 || s.state === 'struck' || s.state === 'sinking' || s.state === 'docked' || s.state === 'boarding') return false;
-    if (s.role === 'player' && aimAt && aimAt.role !== 'pirate') s.aggroT = G.t;
+    if (s.role === 'player' && aimAt && !G.legal(aimAt)) s.aggroT = G.t;
     const shot = SHOTS[s.shot];
     const guns = side > 0 ? s.mesh.guns.star : s.mesh.guns.port;
     let d = 150;
@@ -334,7 +335,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       if (s.role === 'player') { say('The ' + s.name + ' is going down!', 'bad'); G.sinking = { t: G.t }; }
       else {
         const by = s.threat;
-        if (by && by.role === 'player') { const salvage = Math.round((s.gold || 100) * 0.25); G.gold += salvage; G.fame += 3; say('Sank the ' + s.name + '. Salvage: +' + salvage + ' gold', 'good'); flash(s.name + ' sinks', '+' + salvage + ' gold in salvage'); }
+        if (by && by.role === 'player') { credit(s, 'sink'); const salvage = Math.round((s.gold || 100) * 0.25); G.gold += salvage; G.fame += 3; say('Sank the ' + s.name + '. Salvage: +' + salvage + ' gold', 'good'); flash(s.name + ' sinks', '+' + salvage + ' gold in salvage'); }
       }
       return;
     }
@@ -459,7 +460,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (!G.canBoard(a, b)) return false;
     G.boarding = { a, b, t: 0, p: odds(a, b), roll: G.attract && a.role === 'player' && !G.prizes ? 0 : rnd(), side: sideTo(a, b) }; // the trailer's first prize always falls
     a.state = 'boarding'; b.prevState = b.state; b.state = 'boarding'; a.sailSet = 0; a.rudder = 0; b.rudder = 0;
-    if (a.role === 'player' && b.role !== 'pirate') a.aggroT = G.t;
+    if (a.role === 'player' && !G.legal(b)) a.aggroT = G.t;
     emit('board', G.boarding);
     if (a.role === 'player') say('Grapples away! Boarding the ' + b.name + '.', 'info');
     return true;
@@ -487,11 +488,12 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       a.state = a.role === 'player' ? 'sail' : 'engage';
       G.boarding = null;
       if (win) {
-        b.state = 'struck'; b.mesh.setFlag(a.role === 'player' ? 'jolly' : 'white'); b.flagKind = 'captured';
+        b.state = 'struck'; b.mesh.setFlag(a.role === 'player' ? G.colours() : 'white'); b.flagKind = 'captured';
         if (a.role === 'player') {
           const goods = Object.entries(b.cargo).filter(([, n]) => n > 0);
           G.loot = { ship: b, gold: b.gold, goods, lost: lossA, t: G.t };
           G.prizes++; G.fame += 8 + Math.round(b.gold / 40);
+          credit(b, 'prize');
           updateRank();
           say('Took the ' + NATIONS[b.nation].adj + ' ' + b.C.name.toLowerCase() + ' ' + b.name + '. Lost ' + lossA + ' men.', 'good');
           emit('won', b);
@@ -509,15 +511,15 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (choice === 'cargo' || choice === 'ship') {
       G.gold += L.gold; b.gold = 0;
       let room = holdRoom();
-      for (const [id, n] of L.goods) { const k = Math.min(n, room); G.cargo[id] += k; room -= k; b.cargo[id] -= k; }
+      for (const [id, n] of L.goods) { const k = Math.min(n, room); G.cargo[id] += k; G.stolen[id] = (G.stolen[id] || 0) + k; room -= k; b.cargo[id] -= k; }
       if (L.gold) flash('+' + L.gold + ' gold', 'Cargo taken from the ' + b.name, 4);
     }
     if (choice === 'ship' && CLASSES[b.cls].guns >= G.player.C.guns * 0.8) {
       const old = G.player;
-      b.role = 'player'; b.nation = 'pirate'; b.crew = Math.max(12, Math.round(old.crew * 0.85)); b.morale = 1; b.state = 'sail'; b.sailSet = 1; b.mesh.setFlag('jolly'); b.flagKind = 'jolly';
+      b.role = 'player'; b.nation = 'pirate'; b.crew = Math.max(12, Math.round(old.crew * 0.85)); b.morale = 1; b.state = 'sail'; b.sailSet = 1; applyColours(b);
       b.hull = Math.max(b.hull, b.maxHull * 0.5); b.sails = Math.max(b.sails, b.maxSails * 0.5);
       old.role = 'merchant'; old.nation = 'pirate'; old.state = 'sail'; old.crew = Math.max(6, Math.round(old.crew * 0.15)); old.dest = 'port'; old.prize = true;
-      const home = nearestPort(old.x, old.z); old.path = route(old.x, old.z, home.x, home.z - 10); old.wp = 0;
+      const home = nearestPort(old.x, old.z, G.welcome) || nearestPort(old.x, old.z); old.path = route(old.x, old.z, home.x, home.z - 10); old.wp = 0;
       G.player = b; G.selected = null;
       say('The ' + b.name + ' is your flagship now. A prize crew takes the ' + old.name + ' to port.', 'good');
       emit('flagship', b);
@@ -541,6 +543,70 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (G.rank === null) { G.rank = r; say('You enter the Ladder of Famous Captains at #' + r + '.', 'good'); flash('Ladder of Famous Captains: #' + r, 'Title: Sea Rat', 5); }
     else if (r < G.rank) { G.rank = r; say('You climb the Ladder to #' + r + '.', 'good'); }
   }
+  // ---------------- nations ----------------
+  const clampSt = n => { G.standing[n] = Math.max(-30, Math.min(30, G.standing[n] || 0)); };
+  // a port lets you in unless its crown (or, at the cove, the Brethren) has turned hostile
+  G.welcome = P => (G.standing[P.nation === 'pirate' ? 'pirate' : P.nation] || 0) >= CLOSED_BELOW;
+  // a legal prize: a pirate (unless you are one of the Brethren), or an enemy of the crown whose letter you carry
+  G.legal = b => b.nation === 'pirate' ? !G.brethren : !!(G.commission && atWar(G.commission.nation, b.nation));
+  G.colours = () => G.commission ? LIVERIES[G.commission.nation].flag : 'jolly';
+  function applyColours(s) { s.mesh.setFlag(G.colours()); s.flagKind = G.colours(); }
+  G.applyColours = () => applyColours(G.player);
+  G.rankName = () => G.commission ? RANKS[G.commission.rank].name : null;
+  // what a prize or a sinking does to your name
+  function credit(b, kind) {
+    const X = b.nation, C = G.commission;
+    if (X === 'pirate') {
+      G.standing.pirate = (G.standing.pirate || 0) - (kind === 'prize' ? 5 : 7);
+      for (const n of NATION_IDS) G.standing[n] = (G.standing[n] || 0) + 1.5;
+      if (G.brethren) { G.brethren = false; say('The Brethren of the Coast cast you out for preying on your own.', 'bad'); flash('Cast out', 'The Brethren of the Coast will not forget it'); }
+    } else {
+      G.standing[X] = (G.standing[X] || 0) - (kind === 'prize' ? 4 : 6);
+      for (const n of NATION_IDS) if (atWar(n, X)) G.standing[n] = (G.standing[n] || 0) + 2;
+      if (C && atWar(C.nation, X)) {
+        G.standing[C.nation] += 3; C.prizes++;
+        const money = 100 + 50 * C.rank; G.gold += money;
+        say(NATIONS[C.nation].name + ' pays ' + money + ' gold prize money for the ' + b.name + '.', 'good');
+        while (C.rank < RANKS.length - 1 && C.prizes >= RANKS[C.rank + 1].prizes) {
+          const R = RANKS[++C.rank]; G.gold += R.gold; G.fame += R.fame;
+          say('Promoted to ' + R.name + ' by ' + NATIONS[C.nation].name + ': ' + R.gold + ' gold.', 'good');
+          flash('Promoted to ' + R.name, NATIONS[C.nation].name + ' pays you ' + R.gold + ' gold', 5);
+          emit('promoted', { nation: C.nation, rank: C.rank });
+        }
+      } else if (C && friendly(C.nation, X)) {
+        G.standing[C.nation] -= 10;
+        say(NATIONS[C.nation].name + ' will not forget an attack on ' + (C.nation === X ? 'its own flag' : 'an ally') + '.', 'bad');
+      }
+      if (C && G.standing[C.nation] < 0) { say('Your letter of marque from ' + NATIONS[C.nation].name + ' is revoked.', 'bad'); flash('Letter of marque revoked', 'You sail under the black flag again'); G.commission = null; applyColours(G.player); }
+    }
+    for (const n of [...NATION_IDS, 'pirate']) clampSt(n);
+  }
+  // offered by a governor in his own port once your standing is high enough; one letter at a time
+  G.canMarque = () => { const P = G.docked && G.dockPort; return !!(P && P.nation !== 'pirate' && !G.brethren && (G.standing[P.nation] || 0) >= MARQUE_AT && (!G.commission || G.commission.nation !== P.nation)); };
+  G.acceptMarque = () => {
+    if (!G.canMarque()) return false;
+    const n = G.dockPort.nation;
+    if (G.commission) say('You return your letter from ' + NATIONS[G.commission.nation].name + '.', 'info');
+    G.commission = { nation: n, rank: 0, prizes: 0 };
+    applyColours(G.player);
+    say('Letter of marque from ' + NATIONS[n].name + ': ' + NATION_IDS.filter(x => atWar(n, x)).map(x => NATIONS[x].adj).join(' and ') + ' ships are now your lawful prizes.', 'good');
+    flash('Letter of marque', 'You sail as a Privateer of ' + NATIONS[n].name, 5);
+    emit('marque', n);
+    return true;
+  };
+  G.resignMarque = () => { if (!G.commission) return false; say('You return your letter of marque to ' + NATIONS[G.commission.nation].name + '.', 'info'); G.commission = null; applyColours(G.player); return true; };
+  // the Brethren of the Coast: offered at the cove to captains who have taken a prize, and never with a letter
+  G.canJoinBrethren = () => !!(G.docked && G.dockPort.nation === 'pirate' && !G.brethren && !G.commission && G.prizes >= BRETHREN_PRIZES && (G.standing.pirate || 0) >= 0);
+  G.joinBrethren = () => {
+    if (!G.canJoinBrethren()) return false;
+    G.brethren = true; G.standing.pirate = Math.max(G.standing.pirate || 0, 10);
+    say('You swear the articles of the Brethren of the Coast. Pirates will leave you be, and the cove pays well for stolen cargo.', 'good');
+    flash('Brethren of the Coast', 'Pirate ships leave you alone', 5);
+    emit('brethren', true);
+    return true;
+  };
+  G.fenceRate = id => G.brethren && G.port && G.port.id === 'cove' && (G.stolen[id] || 0) > 0 ? 1.3 : 1;
+
   G.title = () => G.rank === null ? 'Nobody' : G.rank > 40 ? 'Sea Rat' : G.rank > 20 ? 'Freebooter' : G.rank > 5 ? 'Captain of Renown' : 'Legend of the Caribbean';
 
   // ---------------- port ----------------
@@ -563,7 +629,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     s.x += (m.x - s.x) * k; s.z += (m.z - s.z) * k; s.psi = wrap(s.psi + wrap(m.psi - s.psi) * k); s.v *= 0.9; s.sailSet = 0; s.rudder = 0; s.tacking = null;
     return d < 1.2 && Math.abs(wrap(m.psi - s.psi)) < 0.06;
   }
-  G.dock = () => { const p = G.player; if (G.docked || G.docking || p.state === 'sinking') return false; const P = G.portAt(p); if (!P) return false; G.dockPort = P; G.docking = true; p.path = null; G.course = null; say('Making for the quay at ' + P.name + '.'); return true; };
+  G.dock = () => { const p = G.player; if (G.docked || G.docking || p.state === 'sinking') return false; const P = G.portAt(p); if (!P) return false;
+    if (!G.welcome(P)) { if (G.t - (G.refusedT || -99) > 8) { G.refusedT = G.t; say(P.name + ' has closed its harbour to you. Raise your standing with ' + (P.nation === 'pirate' ? 'the Brethren' : NATIONS[P.nation].name) + ' first.', 'warn'); emit('refused', P); } return false; } G.dockPort = P; G.docking = true; p.path = null; G.course = null; say('Making for the quay at ' + P.name + '.'); return true; };
   function arrive() {
     const p = G.player; G.docking = false; G.docked = true; p.towed = false; p.state = 'docked'; p.v = 0; p.rudder = 0; p.mesh.setFurled(true);
     G.port = openPort(G.dockPort);
@@ -582,7 +649,13 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const g = GOODS.find(x => x.id === id), m = G.markets[G.port.id][id];
     let k = 0;
     if (n > 0) { for (; k < n && holdRoom() > 0 && G.gold >= unitBuy(g, m); k++) { G.gold -= unitBuy(g, m); G.cargo[id]++; m.k = Math.min(2.5, m.k * 1.004); } }
-    else { for (; k < -n && G.cargo[id] > 0; k++) { G.gold += unitSell(g, m); G.cargo[id]--; m.k = Math.max(0.4, m.k * 0.994); } }
+    else {
+      for (; k < -n && G.cargo[id] > 0; k++) {
+        G.gold += Math.round(unitSell(g, m) * G.fenceRate(id)); G.cargo[id]--; m.k = Math.max(0.4, m.k * 0.994);
+        if (G.stolen[id] > 0) G.stolen[id]--;
+        else { const nat = PORT_BY_ID[G.port.id].nation; if (nat !== 'pirate' && (G.standing[nat] || 0) < MARQUE_AT + 4) G.standing[nat] = (G.standing[nat] || 0) + 0.03; } // honest trade builds your name
+      }
+    }
     if (k) emit('coin', n);
     return k;
   };
@@ -601,6 +674,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const n = spawn({ cls, nation: 'pirate', role: 'player', name: p.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, crewFrac: 0, seed: 3 });
     n.crew = Math.min(n.maxCrew, p.crew); n.state = 'docked'; n.mesh.setFurled(true);
     remove(p); G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 };
+    applyColours(n);
     say('Bought a ' + C.name.toLowerCase() + ' (trade-in ' + tradeIn + ' gold).', 'good'); emit('flagship', n); emit('coin', -C.price);
     return true;
   };
@@ -683,12 +757,14 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const range = s.role === 'navy' ? 300 : 280;
     let tgt = null;
     if (s.threat && s.threat.alive && s.threat.state !== 'sinking' && G.t - s.threatT < 90) tgt = s.threat;
-    else if (foe && fd < range && (s.role === 'pirate' ? foe.role === 'merchant' || (foe.role === 'player' && foe.C.guns <= s.C.guns * 1.2) : foe.role === 'player' || foe.role === 'pirate')) tgt = foe;
+    else if (foe && fd < range && (s.role === 'pirate' ? foe.role === 'merchant' || (foe.role === 'player' && !G.brethren && foe.C.guns <= s.C.guns * 1.2) : foe.role === 'player' || foe.role === 'pirate')) tgt = foe;
     // navies always hunt a pirate when their nation is hostile to you; otherwise only one that is wanted
     // (fired on or boarded an honest ship in the last ten minutes) and sails too close. Honest traders pass.
+    // a navy also hunts the flag of a crown it is at war with, and never troubles its own or an ally's privateer
     if (s.role === 'navy' && tgt === P && s.threat !== P) {
-      const hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - (P.aggroT ?? -1e9) < 600;
-      if (!hostileNation && !(wanted && fd < 170)) tgt = null;
+      const C = G.commission, hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - (P.aggroT ?? -1e9) < 600;
+      const enemyFlag = C && atWar(C.nation, s.nation), ownFlag = C && friendly(C.nation, s.nation);
+      if (!(hostileNation || enemyFlag || (!ownFlag && wanted && fd < 170))) tgt = null;
     }
     // the forts cover the harbours: hunters break off near any port, and give up a long stern chase
     if (tgt) { const hp = nearestPort(tgt.x, tgt.z); if (Math.hypot(tgt.x - hp.x, tgt.z - hp.z) < 150 || Math.hypot(tgt.x - s.x, tgt.z - s.z) > range * 1.35) { if (s.threat === tgt) s.threat = null; tgt = null; } }
@@ -725,7 +801,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     // at sea (here.id null) there is nothing to buy where we are: only the empty-run plan below applies
     if (here.id) for (const g of GOODS) for (const Q of PORTS) {
       const P0 = G.prices(here.id);
-      if (Q === here) continue;
+      if (Q === here || !G.welcome(Q)) continue;
       const buy = P0[g.id].buy, sell = G.prices(Q.id)[g.id].sell;
       const qty = Math.min(room, Math.floor((G.gold - reserve) / (buy * 1.05)));
       if (qty < 5) continue;
@@ -736,10 +812,10 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (best) return best;
     let empty = null;
     for (const R of PORTS) {
-      if (R === here) continue;
+      if (R === here || !G.welcome(R)) continue;
       const PR = G.prices(R.id);
       for (const g of GOODS) for (const Q of PORTS) {
-        if (Q === R) continue;
+        if (Q === R || !G.welcome(Q)) continue;
         const units = Math.min(room, Math.floor((G.gold - 120) / (PR[g.id].buy * 1.05)));
         if (units < 5) continue;
         const spread = G.prices(Q.id)[g.id].sell * 0.85 - PR[g.id].buy * 1.1;
@@ -753,10 +829,10 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   function planAtSea(p) {
     if (holdUsed() > 0) {
       let best = null;
-      for (const Q of PORTS) { const P = G.prices(Q.id), v = GOODS.reduce((a, g) => a + G.cargo[g.id] * P[g.id].sell, 0) / (Math.hypot(Q.x - p.x, Q.z - p.z) + 250); if (!best || v > best.v) best = { dest: Q.id, v }; }
+      for (const Q of PORTS.filter(G.welcome)) { const P = G.prices(Q.id), v = GOODS.reduce((a, g) => a + G.cargo[g.id] * P[g.id].sell, 0) / (Math.hypot(Q.x - p.x, Q.z - p.z) + 250); if (!best || v > best.v) best = { dest: Q.id, v }; }
       return { good: null, dest: best.dest, cost: null };
     }
-    const near = nearestPort(p.x, p.z, P => P.nation !== 'pirate');
+    const near = nearestPort(p.x, p.z, P => P.nation !== 'pirate' && G.welcome(P)) || nearestPort(p.x, p.z, G.welcome);
     if (planTrade(near)) return { good: null, dest: near.id }; // something worth buying at the nearest port: start there
     return planTrade({ id: null, x: p.x, z: p.z }) || { good: null, dest: near.id };
   }
@@ -830,7 +906,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       A.phase = 'flee'; A.msg = 'Running from the ' + danger.name; A.pathFor = null; p.path = null; G.selected = danger;
       const away = headingTo(p.x - danger.x, p.z - danger.z);
       // the nearest harbour that does not lie behind the hunter; its fort makes him break off
-      const hp = nearestPort(p.x, p.z, P => Math.abs(wrap(headingTo(P.x - p.x, P.z - p.z) - away)) < 1.6) || nearestPort(p.x, p.z);
+      const hp = nearestPort(p.x, p.z, P => G.welcome(P) && Math.abs(wrap(headingTo(P.x - p.x, P.z - p.z) - away)) < 1.6) || nearestPort(p.x, p.z, G.welcome) || nearestPort(p.x, p.z);
       if (Math.hypot(p.x - hp.x, p.z - hp.z) < 60) { G.dock(); return; }
       const home = headingTo(hp.x - p.x, hp.z - p.z);
       const want = Math.abs(wrap(home - away)) < (trader ? 1.6 : 1.1) ? home : wrap(away + wrap(G.wind.from + Math.PI - away) * 0.3);
@@ -848,7 +924,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       p.sailSet = 1; followPath(p, 25);
     };
     if (G.order === 'port' || needPort) {
-      const P = G.order === 'port' && !needPort ? PORT_BY_ID[A.portGoal] || nearestPort(p.x, p.z) : nearestPort(p.x, p.z);
+      const home = nearestPort(p.x, p.z, G.welcome) || nearestPort(p.x, p.z);
+      const P = G.order === 'port' && !needPort ? PORT_BY_ID[A.portGoal] || home : home;
       A.msg = needPort && G.order !== 'port' ? 'Heading to ' + P.name + ' to ' + (A.toPort ? 'sell the prize cargo' : p.hull < p.maxHull * 0.4 ? 'repair' : holdRoom() < 8 ? 'sell the cargo' : 'hire crew') : 'Sailing to ' + P.name;
       A.phase = 'port';
       sailFor(P, 'port:');
@@ -928,12 +1005,13 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       G.sinking = null;
       const half = Math.floor(G.gold / 2); G.gold -= half;
       for (const g of GOODS) G.cargo[g.id] = 0;
-      G.dockPort = nearestPort(P.x, P.z);
+      G.stolen = {};
+      G.dockPort = nearestPort(P.x, P.z, G.welcome) || PORTS[0];
       const m = G.moor({ T: TYPES.sloop });
       const n = spawn({ cls: 'sloop', nation: 'pirate', role: 'player', name: 'Second Chance', x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
       n.crew = Math.round(n.maxCrew * 0.7);
       if (P.alive) remove(P);
-      G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 };
+      G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 }; applyColours(n);
       n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = openPort(G.dockPort);
       say('You wash up in ' + G.dockPort.name + ' with half your gold (' + half + ' lost) and a free sloop.', 'bad');
       flash('Shipwrecked', 'Half your gold is gone. The governor lends you a sloop.', 6);
@@ -953,6 +1031,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       t: G.t, phase: G.phase, weather: G.weather, weatherTarget: G.weatherTarget, nextWeather: G.nextWeather, windBase: G.windBase,
       gold: G.gold, cargo: { ...G.cargo }, fame: G.fame, prizes: G.prizes, rank: G.rank, standing: { ...G.standing }, upgrades: { ...G.upgrades },
       tradeProfit: G.tradeProfit, port: G.dockPort.id, rng: rnd.getState(),
+      commission: G.commission && { ...G.commission }, brethren: G.brethren, stolen: { ...G.stolen },
       markets: Object.fromEntries(Object.entries(G.markets).map(([id, m]) => [id, Object.fromEntries(Object.entries(m).map(([g, v]) => [g, { mod: v.mod, k: v.k }]))])),
       ship: { cls: p.cls, name: p.name, hull: p.hull, sails: p.sails, crew: p.crew, maxHull: p.maxHull, morale: p.morale },
     };
@@ -972,6 +1051,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       t: d.t, phase: d.phase, weather: d.weather, weatherTarget: d.weatherTarget, nextWeather: d.nextWeather, windBase: d.windBase,
       gold: d.gold, fame: d.fame, prizes: d.prizes, rank: d.rank, slot, tradeProfit: d.tradeProfit || 0,
       cargo: Object.fromEntries(GOODS.map(g => [g.id, d.cargo[g.id] || 0])), standing: { ...G.standing, ...d.standing }, upgrades: { hull: 0, sails: 0, guns: 0, ...d.upgrades },
+      commission: d.commission ? { ...d.commission } : null, brethren: !!d.brethren, stolen: { ...(d.stolen || {}) },
       attract: false, autopilot: false, order: 'hunt', boarding: null, loot: null, sinking: null, docking: false, course: null, selected: null, banner: null, autoDock: false, spawnT: 0,
     });
     for (const id in d.markets) if (G.markets[id]) for (const g in d.markets[id]) if (G.markets[id][g]) Object.assign(G.markets[id][g], d.markets[id][g]);
@@ -981,7 +1061,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const m = G.moor({ T: TYPES[d.ship.cls] });
     const n = spawn({ id: 'player', cls: d.ship.cls, nation: 'pirate', role: 'player', name: d.ship.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
     n.maxHull = d.ship.maxHull || n.maxHull; n.hull = Math.min(n.maxHull, d.ship.hull); n.sails = Math.min(n.maxSails, d.ship.sails); n.crew = Math.min(n.maxCrew, d.ship.crew); n.morale = d.ship.morale ?? 1;
-    n.state = 'docked'; n.mesh.setFurled(true);
+    n.state = 'docked'; n.mesh.setFurled(true); applyColours(n);
     G.player = n; G.docked = true; G.port = openPort(P);
     say('Welcome back, captain. The ' + n.name + ' is moored at ' + P.name + '.', 'good');
     G.placeAll();
@@ -1030,7 +1110,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const p = G.player, A = G.ai;
     G.order = order; G.autopilot = true; A.phase = 'look'; A.t = -99; A.pathFor = null; p.path = null;
     A.trade = null; A.sold = false; A.portT = 0;
-    if (order === 'port') A.portGoal = nearestPort(p.x, p.z).id;
+    if (order === 'port') A.portGoal = (nearestPort(p.x, p.z, G.welcome) || nearestPort(p.x, p.z)).id;
     say(order === 'hunt' ? 'AI captain: hunting nearby prizes.' : order === 'trade' ? 'AI captain: on a trade run. Buy cheap, sell dear.' : 'AI captain: sailing to ' + PORT_BY_ID[A.portGoal].name + '.', 'info');
   };
   return G;

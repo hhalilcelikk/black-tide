@@ -1,0 +1,172 @@
+[
+ {
+  "do": "eval",
+  "js": "window.B = window.__bt; window.G = B.G; window.prize = (nation, cls) => { const p = G.player, s = G.spawn({ cls: cls || 'fluyt', nation, role: 'merchant', x: p.x + Math.sin(p.psi) * 14, z: p.z + Math.cos(p.psi) * 14, psi: p.psi, v: p.v, gold: 200, cargo: { sugar: 10 } }); s.crew = 1; s.state = 'struck'; s.threat = p; s.threatT = G.t; G.placeAll(); return G.board(p, s); }; window.spawnNavy = (nation, d) => { const p = G.player; const s = G.spawn({ cls: 'frigate', nation, role: 'navy', x: p.x + d, z: p.z, psi: Math.PI, v: 2 }); s.path = null; return s.id; }; true"
+ },
+ {
+  "do": "expect",
+  "js": "!G.welcome(G.ports.find(P => P.id === 'catalina')) && G.welcome(G.ports.find(P => P.id === 'rosalind'))",
+  "msg": "at the start Spain keeps Santa Catalina closed to a pirate; Port Rosalind is open"
+ },
+ {
+  "do": "expect",
+  "js": "G.colours() === 'jolly' && G.player.flagKind !== 'stgeorge'",
+  "msg": "with no letter you fly the black flag"
+ },
+ {
+  "do": "eval",
+  "js": "window.st0 = { ...G.standing }; prize('spanish')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "G.takeLoot('cargo'), [G.standing.english - st0.english, G.standing.spanish - st0.spanish]"
+ },
+ {
+  "do": "expect",
+  "js": "G.standing.english === st0.english + 2 && G.standing.french === st0.french + 2 && G.standing.spanish === st0.spanish - 4",
+  "msg": "a Spanish prize costs standing with Spain and earns it with Spain's enemies"
+ },
+ {
+  "do": "eval",
+  "js": "G.standing.english = 9, G.standing.english"
+ },
+ {
+  "do": "eval",
+  "js": "G.handHelm('port'), G.ai.portGoal"
+ },
+ {
+  "do": "until",
+  "js": "G.docked",
+  "max": 300,
+  "step": 1
+ },
+ {
+  "do": "expect",
+  "js": "G.port.id === 'rosalind'",
+  "msg": "docked at Port Rosalind"
+ },
+ {
+  "do": "eval",
+  "js": "G.takeHelm(), document.querySelector('[data-port=governor]').click(), !document.querySelector('[data-act=marque]').disabled"
+ },
+ {
+  "do": "expect",
+  "js": "!document.querySelector('[data-act=marque]').disabled",
+  "msg": "Governor Ashby offers a letter of marque at standing 9"
+ },
+ {
+  "do": "shot",
+  "out": "shots/marque-offer.png"
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-act=marque]').click(), G.commission"
+ },
+ {
+  "do": "expect",
+  "js": "G.commission && G.commission.nation === 'english' && G.rankName() === 'Privateer' && G.player.flagKind === 'stgeorge'",
+  "msg": "you sail as a Privateer of England under the St George's cross"
+ },
+ {
+  "do": "eval",
+  "js": "G.leavePort(), window.gold0 = G.gold, window.eng0 = G.standing.english, true"
+ },
+ {
+  "do": "advance",
+  "sec": 20,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "prize('spanish', 'galleon')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "G.takeLoot('cargo'), G.commission"
+ },
+ {
+  "do": "eval",
+  "js": "prize('spanish')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "G.takeLoot('cargo'), G.commission"
+ },
+ {
+  "do": "expect",
+  "js": "G.commission.prizes === 2 && G.rankName() === 'Captain'",
+  "msg": "two Spanish prizes promote you to Captain"
+ },
+ {
+  "do": "expect",
+  "js": "G.gold - gold0 >= 500 + 100 + 150 && G.standing.english >= eng0 + 2 * 5",
+  "msg": "England pays prize money and the Captain's reward, and your standing rises with each prize"
+ },
+ {
+  "do": "expect",
+  "js": "G.log.some(l => /Promoted to Captain/.test(l.text))",
+  "msg": "the promotion is announced"
+ },
+ {
+  "do": "eval",
+  "js": "G.setCourse(G.player, 160, 220), G.player.sailSet = 1"
+ },
+ {
+  "do": "until",
+  "js": "Math.hypot(G.player.x - G.ports[0].x, G.player.z - G.ports[0].z) > 220",
+  "max": 120,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "window.navyE = spawnNavy('english', 90), window.navyS = spawnNavy('spanish', -90), [navyE, navyS]"
+ },
+ {
+  "do": "advance",
+  "sec": 6,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const e = G.ships.find(s => s.id === navyE); return e && e.target !== G.player; })()",
+  "msg": "the English navy leaves its own privateer alone"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const s = G.ships.find(s => s.id === navyS); return s && s.state === 'engage' && s.target === G.player; })()",
+  "msg": "the Spanish navy hunts the English flag"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const p = G.player, C = G.ports.find(P => P.id === 'catalina'); G.remove(G.ships.find(s => s.id === navyS)); p.x = C.x + 20; p.z = C.z + 20; p.v = 1; return G.dock(); })()"
+ },
+ {
+  "do": "expect",
+  "js": "!G.docked && !G.docking && G.log.some(l => /Santa Catalina has closed its harbour/.test(l.text))",
+  "msg": "Santa Catalina refuses an English privateer"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const d = G.snapshot(); return d.commission.nation === 'english' && d.commission.rank === 1; })()",
+  "msg": "the commission is part of the save"
+ },
+ {
+  "do": "shot",
+  "out": "shots/marque-at-sea.png"
+ }
+]

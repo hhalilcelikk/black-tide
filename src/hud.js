@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CLASSES, NATIONS, TYPES } from './ship.js';
 import { GOODS, SHOTS, ISLANDS, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
 import { PORTS, PORT_BY_ID } from './ports.js';
+import { NATION_IDS, relation, standingWord, MARQUE_AT, CLOSED_BELOW, RANKS, BRETHREN_PRIZES } from './nations.js';
 import { autosave, listSaves, newestSave, loadSlot, exportCareer, importCareer } from './save.js';
 import { phaseName } from './looks.js';
 import { isWater } from './nav.js';
@@ -38,7 +39,7 @@ export function createHud(ctx, audio) {
   const { G, view } = ctx;
   for (const el of document.querySelectorAll('.ico[data-i]')) el.innerHTML = svg(el.dataset.i);
   const el = {};
-  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'continueBtn', 'savesBtn', 'saves', 'saveList', 'savesClose', 'importFile', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
+  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'shipFlag', 'shipRank', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'continueBtn', 'savesBtn', 'saves', 'saveList', 'savesClose', 'importFile', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
   const txt = (e, s) => { if (e.textContent !== s) e.textContent = s; };
   const pct = (e, k) => { const v = (Math.max(0, Math.min(1, k)) * 100).toFixed(1) + '%'; if (e.style.width !== v) e.style.width = v; };
 
@@ -315,9 +316,10 @@ export function createHud(ctx, audio) {
         </div>`;
     } else if (s === 'market') {
       const P = G.port.prices;
-      const tag = id => PD.makes.includes(id) ? ' <span class="dim">· made here</span>' : PD.needs.includes(id) ? ' <span class="ember">· wanted</span>' : '';
+      const stolenTag = id => G.stolen[id] > 0 ? ` <span class="ember">· ${G.stolen[id]} stolen</span>` : '';
+      const tag = id => stolenTag(id) + (PD.makes.includes(id) ? ' <span class="dim">· made here</span>' : PD.needs.includes(id) ? ' <span class="ember">· wanted</span>' : '');
       const list = ids => { const n = ids.map(id => GOODS.find(g => g.id === id).name.toLowerCase()); return n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0]; };
-      h = head('Market', PD.name + ' makes ' + list(PD.makes) + ' cheap, and pays well for ' + list(PD.needs) + '. Prices move with every sale and drift back over the days.') + purse +
+      h = head('Market', PD.name + ' makes ' + list(PD.makes) + ' cheap, and pays well for ' + list(PD.needs) + '. ' + (PD.nation === 'pirate' ? (G.brethren ? 'Stolen cargo fetches 30% more here, brother.' : 'The Brethren get 30% more for stolen cargo here.') : 'Prices move with every sale and drift back over the days.')) + purse +
         `<table class="tbl"><tr><th>Goods</th><th>Hold</th><th>Sell</th><th>Buy</th><th></th></tr>` +
         GOODS.map(g => `<tr><td>${g.name}${tag(g.id)}</td><td>${G.cargo[g.id]}</td><td class="ok">${P[g.id].sell}</td><td class="amber">${P[g.id].buy}</td><td><button data-trade="${g.id}:-10" aria-label="Sell 10 ${g.name}" ${G.cargo[g.id] ? '' : 'disabled'}>−10</button> <button data-trade="${g.id}:10" aria-label="Buy 10 ${g.name}" ${G.gold >= P[g.id].buy && G.holdRoom() > 0 ? '' : 'disabled'}>+10</button></td></tr>`).join('') + `</table>`;
     } else if (s === 'shipwright') {
@@ -335,11 +337,26 @@ export function createHud(ctx, audio) {
         `<div class="cards"><div class="card"><b class="fell">Sign on hands</b><span class="dim">Crew ${Math.round(p.crew)}/${p.maxCrew} · 6 gold a head</span><button data-act="hire10" ${p.crew < p.maxCrew && G.gold >= 60 ? '' : 'disabled'}>Hire 10</button><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire to full</button></div></div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Rumours</h2>` + r.map(x => `<p class="rumour">${x}</p>`).join('');
     } else if (s === 'governor') {
-      const st = n => { const v = G.standing[n] || 0; return v > 8 ? '<span class="ok">Friendly</span>' : v > -5 ? 'Wary' : '<span class="ember">Hostile</span>'; };
-      h = head(PD.governor, PD.govLine) +
-        `<table class="tbl"><tr><th>Nation</th><th>Standing</th><th>Letter of marque</th></tr>` +
-        ['english', 'spanish', 'french', 'dutch'].map(n => `<tr><td><i class="flag ${FLAGS[n]}"></i> ${NATIONS[n].name}</td><td>${st(n)}</td><td>${n === 'english' && G.rank !== null && G.rank <= 45 ? '<button disabled>Offered</button>' : '<span class="dim">Reach #45</span>'}</td></tr>`).join('') + `</table>` +
-        `<p class="dim">Contracts, promotions and rewards arrive with the career milestone.</p>`;
+      // standing with every crown and the Brethren, your commission, and what this port can offer you
+      const C = G.commission, cls = v => v >= MARQUE_AT ? 'ok' : v >= -2 ? '' : v >= CLOSED_BELOW ? 'amber' : 'ember';
+      const stand = id => { const v = G.standing[id] || 0; return `<td class="${cls(v)}">${standingWord(v)}</td><td>${v > 0 ? '+' : ''}${Math.round(v)}</td>`; };
+      const towards = n => !C ? '' : n === C.nation ? 'Your flag' : relation(C.nation, n) === 'war' ? '<span class="ember">At war</span>' : relation(C.nation, n) === 'allied' ? 'Allied' : 'At peace';
+      const rows = NATION_IDS.map(n => `<tr><td><i class="flag ${FLAGS[n]}"></i> ${NATIONS[n].name}</td>${stand(n)}<td>${towards(n)}</td></tr>`).join('') +
+        `<tr><td><i class="flag jolly"></i> The Brethren</td>${stand('pirate')}<td>${G.brethren ? 'Your brothers' : ''}</td></tr>`;
+      const next = C && RANKS[C.rank + 1];
+      const commission = C
+        ? `<div class="card"><b class="fell">${RANKS[C.rank].name} of ${NATIONS[C.nation].name}</b><span class="dim">${C.prizes} prize${C.prizes === 1 ? '' : 's'} taken${next ? ' · ' + next.name + ' at ' + next.prizes + ' (' + next.gold + ' gold)' : ' · the highest rank'}</span>${PD.nation === C.nation ? '<button data-act="resign">Return the letter</button>' : ''}</div>`
+        : G.brethren ? `<div class="card"><b class="fell">Brother of the Coast</b><span class="dim">Pirates leave you be. The cove pays 30% more for stolen cargo.</span></div>`
+        : `<div class="card"><b class="fell">No commission</b><span class="dim">You sail under the black flag. Every navy may take an interest.</span></div>`;
+      let offer = '';
+      if (PD.nation === 'pirate') {
+        offer = G.brethren ? '' : `<div class="card"><b class="fell">The Brethren of the Coast</b><span class="dim">${G.commission ? 'No captain with a letter of marque may swear the articles.' : G.prizes < BRETHREN_PRIZES ? 'Take a prize first. The Brethren want proof.' : 'Swear the articles: pirates leave you alone, and the cove pays more for stolen cargo.'}</span><button data-act="brethren" ${G.canJoinBrethren() ? '' : 'disabled'}>Swear the articles</button></div>`;
+      } else if (!C || C.nation !== PD.nation) {
+        const v = G.standing[PD.nation] || 0;
+        offer = `<div class="card"><b class="fell">Letter of marque</b><span class="dim">${G.brethren ? 'The crown does not commission sworn pirates.' : v >= MARQUE_AT ? 'Sail for ' + NATIONS[PD.nation].name + ': ' + NATION_IDS.filter(x => relation(PD.nation, x) === 'war').map(x => NATIONS[x].adj).join(' and ') + ' ships become lawful prizes, paid and promoted.' : 'Needs standing ' + MARQUE_AT + ' with ' + NATIONS[PD.nation].name + ' (yours: ' + Math.round(v) + '). Trade here, or take their enemies\' ships.'}</span><button data-act="marque" ${G.canMarque() ? '' : 'disabled'}>Accept the letter</button></div>`;
+      }
+      h = head(PD.governor, PD.govLine) + `<div class="cards">${commission}${offer}</div>` +
+        `<table class="tbl" style="margin-top:calc(var(--px)*6)"><tr><th>Crown</th><th>Standing</th><th></th><th>${C ? 'To your flag' : ''}</th></tr>${rows}</table>`;
     } else if (s === 'board') {
       const you = G.rank;
       const rows = RIVALS.slice(0, 10).map((r, i) => `<tr><td>#${i + 1}</td><td class="l">${r[0]}</td><td><i class="flag ${FLAGS[r[1]]}"></i></td><td>${[1900, 1640, 1500, 1380, 1210, 1100, 990, 940, 870, 800][i]}</td></tr>`).join('');
@@ -348,7 +365,7 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Bounties</h2><p class="rumour">500 gold: the pirate sloop Merry Widow, last seen off Gull Cay.</p><p class="rumour">250 gold: news of the Spanish galleon San Telmo's route.</p>`;
     }
     body.innerHTML = h;
-    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.player.maxCrew - Math.round(G.player.crew)); if (a === 'export') G.say('Exported the career to ' + exportCareer(G) + '.'); if (a === 'import') { el.importFile.click(); return; } renderPort(); });
+    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.player.maxCrew - Math.round(G.player.crew)); if (a === 'marque') G.acceptMarque(); if (a === 'resign') G.resignMarque(); if (a === 'brethren') G.joinBrethren(); if (a === 'export') G.say('Exported the career to ' + exportCareer(G) + '.'); if (a === 'import') { el.importFile.click(); return; } renderPort(); });
     for (const b of body.querySelectorAll('[data-trade]')) b.addEventListener('click', () => { const [id, n] = b.dataset.trade.split(':'); G.trade(id, +n); renderPort(); });
     for (const b of body.querySelectorAll('[data-up]')) b.addEventListener('click', () => { G.upgrade(b.dataset.up); renderPort(); });
     for (const b of body.querySelectorAll('[data-buy]')) b.addEventListener('click', () => { G.buyShip(b.dataset.buy); renderPort(); });
@@ -388,6 +405,9 @@ export function createHud(ctx, audio) {
     el.capLine.className = A ? 'amber' : 'dim';
     // ship
     txt(el.shipName, p.name); txt(el.shipCls, CLASSES[p.cls].name);
+    const rk = G.commission ? RANKS[G.commission.rank].name + ' of ' + NATIONS[G.commission.nation].name : G.brethren ? 'Brother of the Coast' : '';
+    txt(el.shipRank, rk); el.shipRank.hidden = !rk;
+    const fk = 'flag ' + G.colours(); if (el.shipFlag.className !== fk) el.shipFlag.className = fk;
     pct(el.hullBar, p.hull / p.maxHull); txt(el.hullN, String(Math.max(0, Math.round(p.hull))));
     pct(el.sailBar, p.sails / p.maxSails); txt(el.sailN, String(Math.round(p.sails)));
     pct(el.crewBar, p.crew / p.maxCrew); txt(el.crewN, String(Math.round(p.crew)));
