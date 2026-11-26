@@ -537,7 +537,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.dock = () => { const p = G.player; if (G.docked || G.docking || p.state === 'sinking') return false; if (!G.nearPort(p)) return false; G.docking = true; p.path = null; G.course = null; say('Making for the quay at ' + PORT.name + '.'); return true; };
   function arrive() {
     const p = G.player; G.docking = false; G.docked = true; p.state = 'docked'; p.v = 0; p.rudder = 0; p.mesh.setFurled(true);
-    G.port = { screen: 'menu', t: G.t, prices: portPrices() };
+    G.port = { screen: 'menu', t: G.t, prices: portPrices(), rumourSeed: Math.floor(rnd() * 2 ** 32) };
     // sell everything automatically for the AI captain
     say('Docked at ' + PORT.name + '.', 'good');
     emit('dock', p);
@@ -783,7 +783,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       n.crew = Math.round(n.maxCrew * 0.7);
       if (P.alive) remove(P);
       G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 };
-      n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = { screen: 'menu', t: G.t, prices: portPrices() };
+      n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = { screen: 'menu', t: G.t, prices: portPrices(), rumourSeed: Math.floor(rnd() * 2 ** 32) };
       say('You wash up in ' + PORT.name + ' with half your gold (' + half + ' lost) and a free sloop.', 'bad');
       flash('Shipwrecked', 'Half your gold is gone. The governor lends you a sloop.', 6);
       emit('flagship', n); emit('dock', n);

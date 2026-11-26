@@ -7,6 +7,7 @@
 #   {"do":"shot","out":"shots/a.png"}         render once and screenshot (relative paths land in this folder)
 #   {"do":"eval","js":"..."}                  evaluate JS, print the JSON result
 #   {"do":"expect","js":"...","msg":"..."}    evaluate JS; a falsy result fails the run (exit 1)
+#   {"do":"expect","js":"...","equals":[]}     ...or fail unless the JSON result equals "equals"
 #   {"do":"key","key":"d","down":true}        press, or hold/release with down/up
 #   {"do":"click","x":..,"y":..}              mouse click
 #   {"do":"wait","ms":500}                    wall-clock wait (avoid: it is not on the sim clock)
@@ -51,7 +52,7 @@ async def main():
                 if r is not None: print('eval:', json.dumps(r)[:1500])
             elif d == 'expect':
                 r = await pg.evaluate(s['js'])
-                ok = bool(r)
+                ok = r == s['equals'] if 'equals' in s else bool(r)
                 print('expect', 'PASS' if ok else 'FAIL', s.get('msg', s['js']), '' if ok else f'(got {json.dumps(r)[:200]})')
                 if not ok: failed.append(s.get('msg', s['js']))
             elif d == 'key':

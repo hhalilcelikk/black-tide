@@ -1,0 +1,102 @@
+[
+ {
+  "do": "advance",
+  "sec": 15,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap at sea (attract, target in view)",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "window.__bt.G.rank = 5, window.__bt.G.rank"
+ },
+ {
+  "do": "advance",
+  "sec": 0.5,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no overlap with the longest rank title",
+  "equals": []
+ },
+ {
+  "do": "shot",
+  "out": "shots/layout-sea.png"
+ },
+ {
+  "do": "until",
+  "js": "window.__bt.state().docked",
+  "max": 400,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=menu]') && document.querySelector('[data-port=menu]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: menu",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=market]') && document.querySelector('[data-port=market]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: market",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=shipwright]') && document.querySelector('[data-port=shipwright]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: shipwright",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=tavern]') && document.querySelector('[data-port=tavern]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: tavern",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=governor]') && document.querySelector('[data-port=governor]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: governor",
+  "equals": []
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=board]') && document.querySelector('[data-port=board]').click()"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "msg": "no HUD plates overlap in port: board",
+  "equals": []
+ },
+ {
+  "do": "shot",
+  "out": "shots/layout-port.png"
+ }
+]

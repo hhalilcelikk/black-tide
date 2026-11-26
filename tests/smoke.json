@@ -1,10 +1,42 @@
 [
-  {"do": "expect", "js": "window.__bt.state().attract === true", "msg": "page opens in the AI captain's attract mode"},
-  {"do": "advance", "sec": 5},
-  {"do": "expect", "js": "window.__bt.state().t >= 4.9", "msg": "sim clock advanced 5 s"},
-  {"do": "expect", "js": "window.__bt.state().p.v > 0", "msg": "player ship is under way"},
-  {"do": "shot", "out": "shots/smoke-deck.png"},
-  {"do": "advance", "sec": 10},
-  {"do": "shot", "out": "shots/smoke-chase.png"},
-  {"do": "eval", "js": "window.__bt.state().ships"}
+ {
+  "do": "expect",
+  "js": "window.__bt.state().attract === true",
+  "msg": "page opens in the AI captain's attract mode"
+ },
+ {
+  "do": "expect",
+  "js": "document.fonts.ready.then(() => [...document.fonts].some(f => f.family.replace(/\"/g, '') === 'BT Pixel' && f.status === 'loaded'))",
+  "msg": "the generated BT Pixel font loads"
+ },
+ {
+  "do": "advance",
+  "sec": 5
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.state().t >= 4.9",
+  "msg": "sim clock advanced 5 s"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.state().p.v > 0",
+  "msg": "player ship is under way"
+ },
+ {
+  "do": "shot",
+  "out": "shots/smoke-deck.png"
+ },
+ {
+  "do": "advance",
+  "sec": 10
+ },
+ {
+  "do": "shot",
+  "out": "shots/smoke-chase.png"
+ },
+ {
+  "do": "eval",
+  "js": "window.__bt.state().ships"
+ }
 ]

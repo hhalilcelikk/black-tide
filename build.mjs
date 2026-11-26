@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildPixelFont } from './tools/pixelfont.mjs';
 
 // Paths are relative to this folder, wherever the build is run from.
 process.chdir(path.dirname(fileURLToPath(import.meta.url)));
@@ -11,7 +12,7 @@ let html = fs.readFileSync('src/template.html', 'utf8');
 const b64 = f => fs.readFileSync(f).toString('base64');
 const F = 'node_modules/@fontsource';
 html = html
-  .replace('__PIXEL__', () => b64('fonts/btpixel.woff2'))
+  .replace('__PIXEL__', () => buildPixelFont().toString('base64'))
   .replace('__FELL__', () => b64(`${F}/im-fell-english/files/im-fell-english-latin-400-normal.woff2`))
   .replace('__FELLI__', () => b64(`${F}/im-fell-english/files/im-fell-english-latin-400-italic.woff2`))
   .replace('__FELLSC__', () => b64(`${F}/im-fell-english-sc/files/im-fell-english-sc-latin-400-normal.woff2`));

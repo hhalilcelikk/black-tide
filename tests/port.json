@@ -1,0 +1,11 @@
+[
+  {"do": "until", "js": "window.__bt.state().docked", "max": 400, "step": 1},
+  {"do": "expect", "js": "window.__bt.state().prizes >= 1", "msg": "the AI captain took a prize before docking"},
+  {"do": "expect", "js": "Number.isInteger(window.__bt.G.port.rumourSeed)", "msg": "docking rolls a seeded rumour pick"},
+  {"do": "eval", "js": "document.querySelector('[data-port=tavern]').click()"},
+  {"do": "expect", "js": "new Set([...document.querySelectorAll('.rumour')].map(e => e.textContent)).size === 3", "msg": "the tavern shows three different rumours"},
+  {"do": "eval", "js": "[...document.querySelectorAll('.rumour')].map(e => e.textContent)"},
+  {"do": "shot", "out": "shots/port-tavern.png"},
+  {"do": "eval", "js": "document.querySelector('[data-port=market]').click()"},
+  {"do": "expect", "js": "document.querySelectorAll('.tbl tr').length > 1", "msg": "the market lists goods"}
+]

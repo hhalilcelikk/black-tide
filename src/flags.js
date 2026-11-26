@@ -1,5 +1,8 @@
 // Cloth flags drawn on canvas and waved in a vertex shader.
 import * as THREE from 'three';
+import { mulberry32 } from './util.js';
+
+const flagRnd = mulberry32(0xf1a6); // per-flag ripple phase, seeded so captures repeat
 
 function canvasFlag(kind) {
   const W = 256, H = 160;
@@ -76,7 +79,7 @@ export function makeFlag(kind, w, h, U) {
   }
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      tMap: { value: tex }, uTime: U.uTime, uLen: { value: w }, uSeed: { value: Math.random() * 10 },
+      tMap: { value: tex }, uTime: U.uTime, uLen: { value: w }, uSeed: { value: flagRnd() * 10 },
       uSunDir: U.uSunDir, uSunCol: U.uSunCol, uAmb: U.uAmb, uFogCol: U.uFogCol, uFogDensity: U.uFogDensity, uSunVis: U.uSunVis,
     },
     vertexShader: /* glsl */`

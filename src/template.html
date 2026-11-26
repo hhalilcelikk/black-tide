@@ -13,7 +13,7 @@ PICTURE: the 3D sea fills the window; plates sit in the four corners and never c
 COLOUR and TYPE: ink #090b11, brass #6b5236, parchment text #efe4cd, amber #e8b04a for actions, ember #ff8a3c for danger, cold #8fc7ff for wind. Pixel font for numbers and labels, IM Fell English SC for names.
 LAYOUT: purse top left, time top centre, AI captain top right, ship bottom left, helm and wind bottom centre, target and views bottom right.
 */
-@font-face{font-family:"BT Pixel";src:url(data:font/woff2;base64,__PIXEL__) format("woff2");font-display:block}
+@font-face{font-family:"BT Pixel";src:url(data:font/ttf;base64,__PIXEL__) format("truetype");font-display:block}
 @font-face{font-family:"IM Fell English";src:url(data:font/woff2;base64,__FELL__) format("woff2");font-display:swap}
 @font-face{font-family:"IM Fell English";font-style:italic;src:url(data:font/woff2;base64,__FELLI__) format("woff2");font-display:swap}
 @font-face{font-family:"IM Fell English SC";src:url(data:font/woff2;base64,__FELLSC__) format("woff2");font-display:swap}
@@ -59,6 +59,7 @@ kbd{font:inherit;color:var(--amber)}
 .stat{display:flex;align-items:center;gap:calc(var(--px)*3)}
 .topc{top:calc(var(--px)*6);left:50%;transform:translateX(-50%);text-align:center;min-width:calc(var(--px)*150)}
 .topc .row{justify-content:center}
+.rtitle:empty{display:none}
 .topc .bar{margin-top:calc(var(--px)*4)}
 #dayBar{background:linear-gradient(90deg,#8fc7ff,#e8b04a);}
 .captain{top:calc(var(--px)*6);right:calc(var(--px)*6);width:calc(var(--px)*128)}
@@ -89,7 +90,8 @@ kbd{font:inherit;color:var(--amber)}
 .flag.prinsen{background:linear-gradient(#d8701e 0 33%,#efe9da 33% 66%,#1f3f7a 66%)}
 .flag.white{background:#ece6d6}
 .views{right:calc(var(--px)*6);bottom:calc(var(--px)*6);display:flex;gap:calc(var(--px)*2);align-items:center;padding:calc(var(--px)*3)}
-.views .sep{width:calc(var(--px)*3)}
+.views{gap:calc(var(--px)*5)}
+.vgrp{display:flex;gap:calc(var(--px)*2)}
 .skymenu{right:calc(var(--px)*6);bottom:calc(var(--px)*28);display:grid;grid-template-columns:repeat(3,auto);gap:calc(var(--px)*2);padding:calc(var(--px)*3)}
 /* centre messages */
 .banner{position:absolute;left:50%;top:calc(var(--px)*32);transform:translateX(-50%);text-align:center;pointer-events:none;text-shadow:var(--px) var(--px) 0 #000,0 0 calc(var(--px)*6) rgba(0,0,0,.6);opacity:0;transition:opacity .25s}
@@ -99,11 +101,11 @@ kbd{font:inherit;color:var(--amber)}
 .log{position:absolute;left:calc(var(--px)*6);top:calc(var(--px)*26);margin:0;padding:0;list-style:none;display:grid;gap:calc(var(--px)*3);pointer-events:none;max-width:calc(var(--px)*170)}
 .log li{text-shadow:var(--px) var(--px) 0 #000;line-height:1.2;transition:opacity 1s}
 .log li.good{color:var(--ok)} .log li.bad{color:var(--ember)} .log li.warn{color:var(--amber)}
-.caption{position:absolute;left:50%;bottom:calc(var(--px)*88);transform:translateX(-50%);text-align:center;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:calc(var(--px)*11);color:#f4ead2;text-shadow:0 0 calc(var(--px)*4) #000,var(--px) var(--px) 0 #000;pointer-events:none;-webkit-font-smoothing:antialiased;white-space:nowrap}
-.attract{left:50%;bottom:calc(var(--px)*86);transform:translateX(-50%);text-align:center;color:var(--amber);animation:pulse 2.4s ease-in-out infinite}
+.caption{position:absolute;left:50%;bottom:calc(var(--px)*88);transform:translateX(-50%);text-align:center;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:calc(var(--px)*11);color:#f4ead2;text-shadow:0 0 calc(var(--px)*4) #000,var(--px) var(--px) 0 #000;pointer-events:none;-webkit-font-smoothing:antialiased;white-space:normal;text-wrap:balance;width:max-content;max-width:calc(100% - var(--px)*296)}
+.attract{left:50%;bottom:calc(var(--px)*86);transform:translateX(-50%);text-align:center;color:var(--amber);animation:pulse 2.4s ease-in-out infinite;width:max-content;max-width:calc(100% - var(--px)*296)}
 @keyframes pulse{50%{box-shadow:inset 0 0 0 var(--px) var(--edge-hi)}}
 .paused{left:50%;top:calc(var(--px)*30);transform:translateX(-50%);color:var(--amber)}
-.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(calc(var(--px)*190),calc(100% - 24px));padding:calc(var(--px)*8)}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(calc(var(--px)*190),calc(100% - 24px));padding:calc(var(--px)*8);z-index:2} /* dialogs sit above the port screen */
 .modal.help{width:min(calc(var(--px)*250),calc(100% - 24px))}
 .modal h2{margin:0 0 calc(var(--px)*5);font-size:calc(var(--px)*16);color:var(--amber)}
 .modal .fell{font-size:calc(var(--px)*13)}
@@ -122,13 +124,13 @@ kbd{font:inherit;color:var(--amber)}
 .sel-ring{position:absolute;border:var(--px) solid var(--amber);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
 /* port screen */
 .port{position:absolute;inset:0;pointer-events:none}
-.portnav{left:calc(var(--px)*6);top:calc(var(--px)*30);width:calc(var(--px)*120)}
+.portnav{left:calc(var(--px)*6);top:calc(var(--px)*36);width:calc(var(--px)*120)}
 .portnav h1{margin:0;font-size:calc(var(--px)*17);color:#f4e4bd;line-height:1.05}
 .portnav .sub{margin:calc(var(--px)*3) 0 calc(var(--px)*6);color:var(--dim);line-height:1.3}
 .portnav nav{display:grid;gap:calc(var(--px)*2)}
 .portnav nav button{text-align:left;display:flex;align-items:center;gap:calc(var(--px)*4)}
 .portnav nav button .ico{width:calc(var(--px)*8);height:calc(var(--px)*8)}
-.portbody{left:calc(var(--px)*132);top:calc(var(--px)*30);width:min(calc(var(--px)*300),calc(100% - var(--px)*140));max-height:calc(100% - var(--px)*64);overflow:auto}
+.portbody{left:calc(var(--px)*132);top:calc(var(--px)*36);width:min(calc(var(--px)*300),calc(100% - var(--px)*270));max-height:calc(100% - var(--px)*70);overflow:auto}
 .portbody h2{margin:0 0 calc(var(--px)*2);font-size:calc(var(--px)*15);color:#f4e4bd}
 .portbody .lede{color:var(--dim);line-height:1.3;margin:calc(var(--px)*3) 0 calc(var(--px)*6)}
 .portbody p{line-height:1.35;margin:calc(var(--px)*4) 0}
@@ -148,6 +150,10 @@ kbd{font:inherit;color:var(--amber)}
 .rumour{padding-left:calc(var(--px)*6);position:relative;line-height:1.35;margin:calc(var(--px)*4) 0}
 .rumour::before{content:"";position:absolute;left:0;top:calc(var(--px)*3);width:calc(var(--px)*3);height:calc(var(--px)*3);background:var(--amber)}
 #flashScreen{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+/* Below ~1540px the one-row bottom HUD (ship 140 + helm 172 + views 286, in --px) no longer fits around a
+   centred helm: stack the camera bar into two rows and centre the helm in the gap between the side plates. */
+@media (max-width:1539px){.views{flex-direction:column;align-items:stretch;gap:calc(var(--px)*2)}.vgrp>button{flex:1 1 auto}
+  .helm{left:calc(50% - var(--px)*8)}.rtitle{display:none}.target{bottom:calc(var(--px)*56)}.skymenu{bottom:calc(var(--px)*54)}.portbody{max-height:calc(100% - var(--px)*96)}}
 @media (max-width:1100px){.log{display:none}.caption{bottom:calc(var(--px)*100)}}
 @media (max-width:820px){:root{--px:2px}.purse{gap:calc(var(--px)*4)}.topc{display:none}.captain{width:calc(var(--px)*104)}.target{bottom:calc(var(--px)*60)}.portbody{left:calc(var(--px)*6);top:calc(var(--px)*150)}}
 @media (prefers-reduced-motion:reduce){.attract{animation:none}.banner,.log li{transition:none}}
@@ -161,7 +167,7 @@ kbd{font:inherit;color:var(--amber)}
   <div class="plate purse" id="purse" aria-label="Purse">
     <span class="stat" title="Gold"><i class="ico" data-i="coin"></i><b id="gold">0</b></span>
     <span class="stat" title="Cargo in the hold"><i class="ico" data-i="crate"></i><b id="hold">0/0</b></span>
-    <span class="stat" title="Ladder of Famous Captains"><i class="ico" data-i="skull"></i><b id="rank">Unranked</b></span>
+    <span class="stat" title="Ladder of Famous Captains"><i class="ico" data-i="skull"></i><b id="rank">Unranked</b><span class="dim rtitle" id="rankT"></span></span>
   </div>
 
   <div class="plate topc" id="topc">
@@ -222,12 +228,8 @@ kbd{font:inherit;color:var(--amber)}
   </div>
 
   <div class="plate views" id="views" role="group" aria-label="Camera and settings">
-    <button data-view="deck" title="Deck: at the helm"><kbd>1</kbd> Deck</button><button data-view="chase" title="Chase: above and behind"><kbd>2</kbd> Chase</button><button data-view="chart" title="Chart: plan long voyages"><kbd>3</kbd> Chart</button>
-    <span class="sep"></span>
-    <button id="pauseBtn" title="Pause and plan (Space)">Pause</button>
-    <button id="skyBtn" title="Time of day and weather" aria-expanded="false">Sky</button>
-    <button id="soundBtn" title="Sound (M)">Sound</button>
-    <button id="helpBtn" title="Controls (?)">?</button>
+    <div class="vgrp"><button data-view="deck" title="Deck: at the helm"><kbd>1</kbd> Deck</button><button data-view="chase" title="Chase: above and behind"><kbd>2</kbd> Chase</button><button data-view="chart" title="Chart: plan long voyages"><kbd>3</kbd> Chart</button></div>
+    <div class="vgrp"><button id="pauseBtn" title="Pause and plan (Space)">Pause</button><button id="skyBtn" title="Time of day and weather" aria-expanded="false">Sky</button><button id="soundBtn" title="Sound (M)">Sound</button><button id="helpBtn" title="Controls (?)">?</button></div>
   </div>
   <div class="plate skymenu" id="skymenu" hidden role="group" aria-label="Sky">
     <button data-sky="day">Day</button><button data-sky="dusk">Dusk</button><button data-sky="night">Night</button>

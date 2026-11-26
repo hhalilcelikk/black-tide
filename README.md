@@ -8,7 +8,7 @@ The playable prototype and look development for Black Tide, a pirate RPG in one 
 
 ```
 npm install
-node build.mjs        # writes dist/index.html (about 910 KB, fonts and script inlined)
+node build.mjs        # writes dist/index.html (about 930 KB, fonts and script inlined)
 ```
 
 Open `dist/index.html` in a desktop browser. Every push to `main` rebuilds it and publishes it to GitHub Pages. Useful URL switches:
@@ -46,8 +46,8 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/audio.js` | Sea and wind beds, cannon, bells and the shanty with captions |
 | `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
 | `src/template.html` | Page shell and the HUD markup and styles |
-| `fonts/btpixel.woff2`, `tools/pixelfont.py` | The BT Pixel font and the script that draws it |
-| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness and scripts |
+| `tools/pixelfont.mjs` | The BT Pixel font: glyph bitmaps and the TrueType builder that `build.mjs` runs |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness; `tests/smoke`, `port` and `layout` run in `npm test` |
 
 ## Credits
 

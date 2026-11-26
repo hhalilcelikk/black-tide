@@ -11,6 +11,7 @@ import { lookAt, RESOLVED, PHASES } from './looks.js';
 import { createGame, PORT } from './game.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
+import { mulberry32 } from './util.js';
 
 // softer point-light falloff close to the source, as lanterns and braziers would read in a miniature
 THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace('max( pow( lightDistance, decayExponent ), 0.01 )', '( pow( lightDistance, decayExponent ) + 2.0 )');
@@ -232,6 +233,7 @@ function wakes() {
 }
 
 const state = { lightning: 0, nextBolt: 6, acc: 0 };
+const boltRnd = mulberry32((+(Q.get('seed') || 7) ^ 0x5bd1e995) >>> 0); // lightning only; separate from the sim RNG
 const STEP = 1 / 60;
 let hud = null, audio = null;
 function simulate(dt) {
@@ -250,7 +252,7 @@ function render(dt) {
   else if (view.mode === 'port') _focus.set(-44, 4, -80);
   else _focus.copy(view.target);
   if (cur.storm > 0.6 && !capture) {
-    if (t > state.nextBolt) { state.lightning = 1; state.nextBolt = t + 5 + Math.random() * 9; fx.bolt.visible = true; fx.bolt.position.set(_focus.x + (Math.random() - 0.5) * 260, 0, _focus.z - 120 - Math.random() * 120); if (audio) audio.thunder(); }
+    if (t > state.nextBolt) { state.lightning = 1; state.nextBolt = t + 5 + boltRnd() * 9; fx.bolt.visible = true; fx.bolt.position.set(_focus.x + (boltRnd() - 0.5) * 260, 0, _focus.z - 120 - boltRnd() * 120); if (audio) audio.thunder(); }
     state.lightning *= Math.exp(-dt * 7); if (state.lightning < 0.05) fx.bolt.visible = false;
   } else if (!capture) { state.lightning = 0; fx.bolt.visible = false; }
   applyLook(t, state.lightning);

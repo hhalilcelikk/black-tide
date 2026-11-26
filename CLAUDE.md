@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + tests/smoke.json through play.py
+npm test                         # build + smoke, port and layout (at 1280, 1024 and 1920 wide) through play.py
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -19,12 +19,12 @@ npm test                         # build + tests/smoke.json through play.py
 
 ## Rules every session follows
 
-1. **One HTML file, no asset files.** The game is `dist/index.html` and nothing else: no images, models, audio, textures or JSON loaded at runtime, and no network requests. Ships, islands, sea, sky, textures, sound and music are generated in code. The only things inlined at build time are three.js and the IM Fell fonts from `node_modules`. Never add a file under `assets/`, `public/` or similar, and never `fetch` or `import` one at runtime. It must still open from `file://`. Keep the build under 2 MB (it is about 910 KB now) and check the size `build.mjs` prints.
-2. **Seeded randomness.** Anything that affects the simulation or what is generated uses `mulberry32(seed)` from `src/util.js`, or the game's `rnd`, never `Math.random()`. The world seed comes from `?seed=` (default 7). The same seed plus the same inputs must replay the same voyage. If something genuinely has to vary (audio noise grain, for example), keep it out of game state and say so in a comment.
+1. **One HTML file, no asset files.** The game is `dist/index.html` and nothing else: no images, models, audio, textures or JSON loaded at runtime, and no network requests. Ships, islands, sea, sky, textures, sound and music are generated in code. The only things inlined at build time are three.js, the IM Fell fonts from `node_modules`, and the BT Pixel font, which `tools/pixelfont.mjs` builds from glyph bitmaps in code (edit `GLYPHS` there to change a letter). Never add a file under `assets/`, `public/` or similar, and never `fetch` or `import` one at runtime. It must still open from `file://`. Keep the build under 2 MB (it is about 910 KB now) and check the size `build.mjs` prints.
+2. **Seeded randomness.** Anything that affects the simulation or what is generated uses `mulberry32(seed)` from `src/util.js`, or the game's `rnd`, never `Math.random()`. The world seed comes from `?seed=` (default 7). The same seed plus the same inputs must replay the same voyage. Things that only affect the picture get their own seeded stream (`boltRnd` in `main.js`, `flagRnd` in `flags.js`), so render rate can never shift the sim RNG. Only `src/audio.js` may use `Math.random()`, for noise grain that never feeds back into the game.
 3. **Fixed 1/60 s simulation step.** Game state changes only inside `G.step(STEP)`, with `STEP = 1 / 60` (`src/main.js`). Never read `performance.now()`, `Date.now()` or a frame `dt` inside the simulation. Wall-clock time only feeds the accumulator that decides how many steps to run, plus rendering, camera smoothing and audio. Timers count simulated seconds (`G.t`).
-4. **Gameplay tests run through `play.py` on `?test`.** `window.__bt.advance(sec)` steps the sim on the fixed clock, and `state()` reports it. Write gameplay checks as `expect` steps in a JSON script under `tests/`. Run `npm test` after every gameplay change, and add or extend a script whenever you add a mechanic. A failing expect or a page error exits 1. Do not test with `wait` (wall clock) when `advance`/`until` will do.
+4. **Gameplay tests run through `play.py` on `?test`.** `window.__bt.advance(sec)` steps the sim on the fixed clock, and `state()` reports it. Write gameplay checks as `expect` steps in a JSON script under `tests/` (`"equals"` compares the JSON result, so a check can return a list of problems and expect `[]`). Prove a new check can fail by planting the bug once. Run `npm test` after every gameplay change, and add or extend a script whenever you add a mechanic. A failing expect or a page error exits 1. Do not test with `wait` (wall clock) when `advance`/`until` will do.
 5. **Stills come from `shoot.py` on `?capture`.** `window.__ld.shot({...})` stages a named look, a fixed isometric camera and a fleet. Use it for look development and before/after comparisons of rendering changes, with the same shot JSON on both sides.
-6. **Look at a screenshot before every commit.** Before each commit, take at least one `shot` with `play.py` (for gameplay or HUD changes) or `shoot.py` (for rendering changes) and open the PNG yourself. Check that the scene renders (not black or blank), the HUD isn't clipped or overlapping, and the change is actually visible. Say in the commit message or to the user what you looked at. A passing test is not enough on its own.
+6. **Look at a screenshot before every commit.** Before each commit, take at least one `shot` with `play.py` (for gameplay or HUD changes) or `shoot.py` (for rendering changes) and open the PNG yourself. Check that the scene renders (not black or blank), the HUD isn't clipped or overlapping, and the change is actually visible. For HUD work, look at 1024 and 1920 wide as well as 1280; `tests/layout.json` catches plates overlapping but not text clipped inside a plate. Say in the commit message or to the user what you looked at. A passing test is not enough on its own.
 
 ## Conventions
 
@@ -32,8 +32,6 @@ npm test                         # build + tests/smoke.json through play.py
 - URL flags: `?seed=`, `?skip=attract`, `?gold=`, `?test`, `?capture`. New debug switches go behind a URL flag, not a code edit.
 - Commit small, working steps. The build must pass and `npm test` must be green before a push, because Pages deploys every push to `main`.
 
-## Known gaps against these rules (fix when touching the area)
+## HUD layout
 
-- `fonts/btpixel.woff2` is a committed binary. It is generated by `tools/pixelfont.py`, but that script reads glyph strings from a Cinderwatch source file that isn't in this repo, so the font can't be regenerated yet. The goal is to move the glyph data into the repo and build the font in code at build time.
-- `src/hud.js` shuffles the tavern rumours with `Math.random()`. That is game-visible, so it should use the seeded RNG.
-- `src/main.js` (lightning timing), `src/flags.js` (flag shader seed) and `src/audio.js` use `Math.random()`. These are cosmetic, but the lightning should move to the seeded RNG so captures replay exactly.
+The HUD is sized in `--px` units (2 px, 3 px on very large screens). Below 1540 px wide, the camera bar stacks into two rows, the helm centres between the side plates and the rank shows without its title. New plates must stay clear of the others at 1024x768 (`tests/layout.json`). Dialogs (`.modal`) sit above the port screen.

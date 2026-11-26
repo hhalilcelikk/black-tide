@@ -40,3 +40,10 @@ export function smax(a, b, k) {
   const h = clamp(0.5 + 0.5 * (a - b) / k, 0, 1);
   return b + (a - b) * h + k * h * (1 - h);
 }
+
+// Fisher-Yates shuffle of a copy, driven by a seeded generator such as mulberry32(seed).
+export function shuffled(arr, rnd) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}

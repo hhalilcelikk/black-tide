@@ -4,6 +4,7 @@ import { CLASSES, NATIONS, TYPES } from './ship.js';
 import { GOODS, SHOTS, ISLANDS, PORT, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
 import { phaseName } from './looks.js';
 import { isWater } from './nav.js';
+import { mulberry32, shuffled } from './util.js';
 
 // ---------- pixel icons (8-9 px bitmaps -> crisp inline SVG) ----------
 const PAL = { G: '#e8b04a', g: '#a8742a', Y: '#ffe2a0', B: '#e9dfc8', b: '#b9ad93', E: '#ff8a3c', e: '#c9481e', C: '#8fc7ff', c: '#4f86c6', S: '#9aa3b0', s: '#5b6472', W: '#8a6a48', w: '#5a4330', o: '#0b0d14', R: '#c4382b' };
@@ -35,7 +36,7 @@ export function createHud(ctx, audio) {
   const { G, view } = ctx;
   for (const el of document.querySelectorAll('.ico[data-i]')) el.innerHTML = svg(el.dataset.i);
   const el = {};
-  for (const id of ['gold', 'hold', 'rank', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
+  for (const id of ['gold', 'hold', 'rank', 'rankT', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
   const txt = (e, s) => { if (e.textContent !== s) e.textContent = s; };
   const pct = (e, k) => { const v = (Math.max(0, Math.min(1, k)) * 100).toFixed(1) + '%'; if (e.style.width !== v) e.style.width = v; };
 
@@ -285,7 +286,7 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Ships for sale</h2><p class="lede">Trade-in for your ${CLASSES[p.cls].name.toLowerCase()}: ${tradeIn} gold.</p><div class="cards">` +
         ['sloop', 'schooner', 'brigantine', 'frigate'].map(k => { const C = CLASSES[k]; const own = k === p.cls; return `<div class="card"><b class="fell">${C.name}</b><span class="dim">${C.role}</span><div class="kv"><span>Guns</span><b>${C.guns}</b><span>Crew</span><b>${C.crew}</b><span>Hold</span><b>${C.hold}</b><span>Speed</span><b>${C.knots} kn</b></div><button data-buy="${k}" ${!own && G.gold + tradeIn >= C.price ? '' : 'disabled'}>${own ? 'Your ship' : fmt(C.price) + ' gold'}</button></div>`; }).join('') + `</div>`;
     } else if (s === 'tavern') {
-      const r = (G.port.rumours = G.port.rumours || [...RUMOURS].sort(() => Math.random() - 0.5).slice(0, 3));
+      const r = (G.port.rumours = G.port.rumours || shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 3));
       h = head('The Drowned Lantern', 'Low beams, loud dice, a fiddler who knows four tunes. Every one of them is a shanty.') + purse +
         `<div class="cards"><div class="card"><b class="fell">Sign on hands</b><span class="dim">Crew ${Math.round(p.crew)}/${p.maxCrew} · 6 gold a head</span><button data-act="hire10" ${p.crew < p.maxCrew && G.gold >= 60 ? '' : 'disabled'}>Hire 10</button><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire to full</button></div></div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Rumours</h2>` + r.map(x => `<p class="rumour">${x}</p>`).join('');
@@ -318,7 +319,7 @@ export function createHud(ctx, audio) {
     tick += dt;
     const p = G.player, A = G.autopilot;
     // purse
-    txt(el.gold, fmt(G.gold)); txt(el.hold, G.holdUsed() + '/' + p.C.hold); txt(el.rank, G.rank === null ? 'Unranked' : '#' + G.rank + ' ' + G.title());
+    txt(el.gold, fmt(G.gold)); txt(el.hold, G.holdUsed() + '/' + p.C.hold); txt(el.rank, G.rank === null ? 'Unranked' : '#' + G.rank); txt(el.rankT, G.rank === null ? '' : G.title());
     // time
     const pn = phaseName(G.phase), wx = G.weather > 0.7 ? 'Storm' : G.weather > 0.3 ? 'Squall' : 'Clear';
     txt(el.tod, pn + ' · ' + wx);
