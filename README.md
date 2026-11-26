@@ -1,14 +1,38 @@
 # Black Tide
 
-**Play it:** https://hhalilcelikk.github.io/black-tide/
+**An open-world pirate RPG in one HTML file: trade, fight and board your way up the Ladder of Famous Captains.**
 
-The playable prototype and look development for Black Tide, a pirate RPG in one HTML file. three.js r170 is bundled into the page and everything else is generated in code: ships, islands, textures, sound and the pixel font.
+### [▶ Play it in your browser](https://hhalilcelikk.github.io/black-tide/)
+
+![The AI captain's opening: the Black Tide closes on the Spanish galleon Santa Rosa at golden hour](docs/opening.gif)
+
+An AI captain is already sailing when the page loads. Click or press any key to take the helm. The whole game is about 1 MB: three.js is bundled in, and everything else is generated in code, from the ships, islands, sea and sky to the sound, the shanties and the pixel font.
+
+**What's in v1:** five ports (English, Spanish, French, Dutch and a pirate haven) with markets that make and need different goods, letters of marque from Privateer to Admiral or the Brethren of the Coast, a living Ladder of fifty rival captains, a fleet of up to three ships, Corvin Vane's Black Wake and a sea serpent to hunt, three shanties with captions, and careers that save at every port.
+
+## Controls
+
+| Key | Does |
+| --- | --- |
+| A / D | Rudder left and right |
+| W / S | Raise or lower sail: stop, half, full |
+| Click the sea | Set a course (any WASD key takes it back); click a town to sail in and dock |
+| Q / E | Fire the port or starboard broadside |
+| R | Shot: round (hull), chain (sails), grape (crew) |
+| B | Board a slowed or struck ship alongside |
+| F | Enter port when you are in the harbour |
+| H | Hand the helm to the AI captain (hunt, sail to port, trade run), or take it back |
+| Space | Pause and plan |
+| 1 2 3 · wheel | Deck, chase and chart cameras; right-drag turns the view |
+| M · L | Sound on or off · shanty captions |
+
+The Sky menu sets the time of day, the weather, and the graphics quality (Low, Medium, High; picked for your machine on the first visit).
 
 ## Build and run
 
 ```
 npm install
-node build.mjs        # writes dist/index.html (about 930 KB, fonts and script inlined)
+node build.mjs        # writes dist/index.html (about 990 KB, fonts and script inlined)
 ```
 
 Open `dist/index.html` in a desktop browser. Every push to `main` rebuilds it and publishes it to GitHub Pages. Useful URL switches:
@@ -56,4 +80,4 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 
 ## Credits
 
-three.js (MIT). The post-processing approach and pixel-font idea follow Cinderwatch by kevintngo (MIT). IM Fell fonts by Igino Marini (SIL OFL). "Drunken Sailor" is a traditional shanty.
+three.js (MIT). Inspired by [Cinderwatch](https://github.com/kevintngo/cinderwatch) by kevintngo (MIT): the single-file format, the AI that plays on load, the post-processing approach and the pixel-font idea. IM Fell fonts by Igino Marini (SIL Open Font License). *Drunken Sailor*, *Haul Away Joe* and *Leave Her, Johnny* are traditional shanties in the public domain.
