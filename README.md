@@ -34,10 +34,11 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | File | What it does |
 | --- | --- |
 | `src/main.js` | Renderer, cameras (deck, chase, chart, port), light registry, frame loop, test and capture hooks |
-| `src/game.js` | Simulation: wind, sailing polar, tacking and wearing, broadsides, boarding, ports, traffic, the AI captain |
+| `src/game.js` | Simulation: wind, sailing polar, tacking and wearing, broadsides, boarding, harbours and markets, traffic between ports, the AI captain (hunt, sail to port, trade run) |
+| `src/ports.js` | The five ports: nation, town layout and style, governor and tavern, what each market makes and needs |
 | `src/hud.js` | Pixel-plate HUD, input, port screens, chart labels, course and target markers |
 | `src/ship.js` | Ship generator (seven classes, five liveries) and the game numbers for each class |
-| `src/world.js` | Islands, town, fort, dock, lighthouse, vegetation and the height bake |
+| `src/world.js` | Islands, towns, forts, docks, lighthouse, vegetation, and the shared height grid (ocean shallows and navigation) |
 | `src/ocean.js`, `src/waves.js` | Faceted Gerstner ocean shared by GPU and CPU (buoyancy), shallows, foam, wakes, glints |
 | `src/post.js` | Half-res render, ambient occlusion, lit mist, bloom, ACES, dither, crisp upscale |
 | `src/detail.js` | The ten 64-pixel material textures with relief |
@@ -47,7 +48,7 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
 | `src/template.html` | Page shell and the HUD markup and styles |
 | `tools/pixelfont.mjs` | The BT Pixel font: glyph bitmaps and the TrueType builder that `build.mjs` runs |
-| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness; `tests/smoke`, `port` and `layout` run in `npm test` |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) and traffic (five minutes at sea); `tests/ports-stills.json` shoots every harbour |
 
 ## Credits
 

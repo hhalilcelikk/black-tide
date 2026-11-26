@@ -15,15 +15,40 @@ export const BLOBS = [
   { x: 92, z: -34, r: 5.5, h: 7, s: 8 },     // sea stacks
   { x: 99, z: -26, r: 3.6, h: 4, s: 9 },
   { x: 86, z: -22, r: 3.0, h: 3, s: 10 },
+  // Santa Catalina (Spanish), south-west: harbour faces south, fort on the eastern headland
+  { x: -576, z: 326, r: 80, h: 30, s: 21 }, { x: -492, z: 414, r: 24, h: 11, s: 22 }, { x: -648, z: 408, r: 30, h: 8, s: 23 }, { x: -700, z: 520, r: 13, h: 4, s: 24 },
+  { x: -570, z: 392, r: 58, h: 8, s: 25 }, // the town shelf behind the harbour
+  // Port Lys (French), east: fort on the western headland, an islet to the north
+  { x: 632, z: -8, r: 70, h: 24, s: 31 }, { x: 556, z: 52, r: 23, h: 10, s: 32 }, { x: 704, z: 40, r: 28, h: 9, s: 33 }, { x: 700, z: -120, r: 18, h: 6, s: 34 },
+  // Vlieghaven (Dutch), north-east: low and flat, fort to the east
+  { x: 392, z: -588, r: 68, h: 16, s: 41 }, { x: 470, z: -528, r: 22, h: 9, s: 42 }, { x: 330, z: -534, r: 27, h: 7, s: 43 },
+  // Hangman's Cove (pirate haven), north-west: rugged, two arms close the cove
+  { x: -614, z: -572, r: 70, h: 34, s: 51 }, { x: -684, z: -482, r: 26, h: 12, s: 52 }, { x: -524, z: -480, r: 24, h: 14, s: 53 }, { x: -470, z: -600, r: 9, h: 9, s: 54 },
+  { x: -606, z: -506, r: 50, h: 8, s: 55 }, // the shanty shelf above the cove
 ];
 
-export const AREA = { x: -320, z: -340, size: 640 };
+export const AREA = { x: -800, z: -780, size: 1600 };
+
+// A blob farther than reach(b) lies more than smax's 4 m below the -28 floor, where smax returns H exactly,
+// so it can be skipped without changing a single height. A 50 m tile index lists the blobs that can
+// reach each tile, so open sea costs one lookup instead of a loop over every island.
+const reach = b => Math.max(b.r * 2.2, b.r + 110);
+const TILE = 50, TN = Math.ceil(AREA.size / TILE), tiles = [];
+for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) {
+  const cx = AREA.x + (i + 0.5) * TILE, cz = AREA.z + (j + 0.5) * TILE, half = TILE * Math.SQRT1_2;
+  tiles.push(BLOBS.filter(b => Math.hypot(cx - b.x, cz - b.z) < reach(b) + half));
+}
+const blobsNear = (x, z) => {
+  const i = Math.floor((x - AREA.x) / TILE), j = Math.floor((z - AREA.z) / TILE);
+  return i >= 0 && j >= 0 && i < TN && j < TN ? tiles[j * TN + i] : BLOBS;
+};
 
 export function heightAt(x, z) {
   let H = -28;
-  for (const b of BLOBS) {
+  for (const b of blobsNear(x, z)) {
     const dx = x - b.x, dz = z - b.z;
     const d = Math.hypot(dx, dz);
+    if (d > reach(b)) continue;
     let hb;
     if (d > b.r * 2.2) hb = -(d / b.r - 1) * b.r * 0.3;
     else {
@@ -45,12 +70,20 @@ export function slopeAt(x, z) {
   return { s: Math.hypot(gx, gz) / 3, gx: gx / 3, gz: gz / 3 };
 }
 
-export function bakeHeight(res = 512) {
+// One height grid over AREA at 1.25 m, sampled once: the ocean's shallows texture and the nav grid both read it.
+let grid = null;
+export function heightGrid() {
+  if (grid) return grid;
+  const res = 1280, cell = AREA.size / res, data = new Float32Array(res * res);
+  for (let j = 0; j < res; j++) for (let i = 0; i < res; i++) data[j * res + i] = heightAt(AREA.x + (i + 0.5) * cell, AREA.z + (j + 0.5) * cell);
+  grid = { data, res, cell, x0: AREA.x, z0: AREA.z };
+  return grid;
+}
+
+export function bakeHeight() {
+  const { data: h, res } = heightGrid();
   const data = new Uint16Array(res * res);
-  for (let j = 0; j < res; j++) for (let i = 0; i < res; i++) {
-    const x = AREA.x + (i + 0.5) / res * AREA.size, z = AREA.z + (j + 0.5) / res * AREA.size;
-    data[j * res + i] = THREE.DataUtils.toHalfFloat(heightAt(x, z));
-  }
+  for (let k = 0; k < h.length; k++) data[k] = THREE.DataUtils.toHalfFloat(h[k]);
   const tex = new THREE.DataTexture(data, res, res, THREE.RedFormat, THREE.HalfFloatType);
   tex.minFilter = tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
@@ -76,8 +109,10 @@ function groundColor(x, h, z, ny, town) {
 
 const TOWN = { x: -50, z: -116, r: 46 };
 
-export function makeTerrain(U) {
-  const sp = 2.4, x0 = -262, x1 = 222, z0 = -318, z1 = 218;
+const ROSALIND_RECT = { x0: -262, x1: 222, z0: -318, z1: 218 };
+
+export function makeTerrain(U, rect = ROSALIND_RECT, towns = [TOWN], seed = 3) {
+  const sp = 2.4, { x0, x1, z0, z1 } = rect;
   const nx = Math.round((x1 - x0) / sp), nz = Math.round((z1 - z0) / sp);
   const P = [];
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
@@ -85,13 +120,14 @@ export function makeTerrain(U) {
     const z = z0 + j * sp + (hash2i(i, j, 78) - 0.5) * sp * 0.55;
     P.push(V(x, heightAt(x, z), z));
   }
-  const g = new Geo(3, 0.07);
+  const g = new Geo(seed, 0.07);
   const ab = new THREE.Vector3(), ac = new THREE.Vector3(), nn = new THREE.Vector3();
   const tri = (a, b, c) => {
     if (Math.max(a.y, b.y, c.y) < -6) return;
     ab.subVectors(b, a); ac.subVectors(c, a); nn.crossVectors(ab, ac).normalize();
     const cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
-    const town = 1 - smoothstep(TOWN.r * 0.75, TOWN.r, Math.hypot(cx - TOWN.x, (cz - TOWN.z) * 1.4));
+    let town = 0;
+    for (const T of towns) town = Math.max(town, 1 - smoothstep(T.r * 0.75, T.r, Math.hypot(cx - T.x, (cz - T.z) * 1.4)));
     const gc = groundColor(cx, cy, cz, Math.abs(nn.y), town);
     g.surf(gc === PAL.rock || gc === PAL.rock2 ? DS.ROCK : gc === PAL.sand || gc === PAL.sand2 || gc === PAL.wet ? DS.SAND : gc === PAL.dirt || gc === PAL.dry ? (town > 0.5 ? DS.COBBLE : DS.SAND) : DS.GRASS);
     g.tri(a, b, c, gc);
@@ -162,13 +198,13 @@ function bushGeo(seed) {
   return g.build();
 }
 
-function scatter(U, geo, count, pick, seed, matOpts = {}) {
+function scatter(U, geo, count, pick, seed, matOpts = {}, rect = { x0: -255, x1: 215, z0: -310, z1: 210 }) {
   const r = mulberry32(seed);
   const mats = [];
   let tries = 0;
   while (mats.length < count && tries < count * 40) {
     tries++;
-    const x = lerp(-255, 215, r()), z = lerp(-310, 210, r());
+    const x = lerp(rect.x0, rect.x1, r()), z = lerp(rect.z0, rect.z1, r());
     const m = pick(x, z, r);
     if (m) mats.push(m);
   }
@@ -257,7 +293,7 @@ function addChurch(g, gw, x, z, rot) {
   for (let i = 0; i < 4; i++) for (const s of [-1, 1]) gw.box(0.12, 1.7, 0.8, mat(...pt(tm, s * 4.03, 3.5, -5 + i * 3.4).toArray(), 0, rot), C('#ffffff'));
 }
 
-function addFort(g, gw, cx, cz, lights, flags) {
+function addFort(g, gw, cx, cz, lights, flags, flagKind = 'stgeorge') {
   const gy = heightAt(cx, cz);
   const stone = C('#bfae8e'), stone2 = C('#a69676'), dark = C('#7f7360');
   const base = gy - 6, top = gy + 4.0, R = 12;
@@ -300,7 +336,7 @@ function addFort(g, gw, cx, cz, lights, flags) {
   for (let i = 0; i < 3; i++) gw.box(0.8, 1.0, 0.1, mat(cx - 4.5 + i * 2.5, top + 2.2, cz + 2.55), C('#ffffff'));
   // flagpole
   g.surf(DS.WOOD); g.rod(V(cx - 2, top + 5, cz - 1), V(cx - 2, top + 17, cz - 1), 0.12, 0.08, 5, C('#4a3a2a')); g.surf(DS.METAL);
-  flags.push({ kind: 'stgeorge', pos: V(cx - 2, top + 16.0, cz - 1), w: 5.2, h: 3.3 });
+  flags.push({ kind: flagKind, pos: V(cx - 2, top + 16.0, cz - 1), w: 5.2, h: 3.3 });
   // brazier on the seaward bastion
   const ba = Math.PI / 4;
   const brz = V(cx + Math.cos(ba) * R * 1.42, top + 1.8, cz + Math.sin(ba) * R * 1.42);
@@ -320,10 +356,9 @@ function boatGeo(g, m, hullC, inC) {
 }
 export { boatGeo };
 
-function addDock(g, gw, lights) {
-  const dx = -40;
-  let zs = -125;
-  while (zs < -40 && heightAt(dx, zs) > 0.15) zs += 0.5;
+function addDock(g, gw, lights, dx = -40, zIn = -125, wall = C('#cdb48c'), roof = C('#6f5a48')) {
+  let zs = zIn;
+  while (zs < zIn + 85 && heightAt(dx, zs) > 0.15) zs += 0.5;
   const z0 = zs - 7, z1 = zs + 30, deckY = 1.45;
   const pl = [C('#8f6e4b'), C('#7e603f'), C('#9a7a54')];
   g.surf(DS.WOOD);
@@ -351,7 +386,7 @@ function addDock(g, gw, lights) {
   boatGeo(g, mat(dx + 4.6, 0.05, z1 - 12, 0, Math.PI / 2 - 0.15), C('#a54b36'), C('#a58a62'));
   // warehouse at the root of the pier
   const wx = dx - 13, wz = zs - 12;
-  addHouse(g, gw, wx, wz, 0.05, 13, 8, 6.2, C('#cdb48c'), C('#6f5a48'), mulberry32(9), 0.4);
+  addHouse(g, gw, wx, wz, 0.05, 13, 8, 6.2, wall, roof, mulberry32(9), 0.4);
   return { x: dx, zShore: zs, end: V(dx, deckY, z1 + 2.3) };
 }
 
@@ -370,13 +405,13 @@ function addLighthouse(g, gw, x, z, lights) {
   lights.push({ pos: V(x, ty + 1.4, z), color: C('#ffd27a'), power: 2.2, kind: 'beacon' });
 }
 
-function addRocks(g, seed) {
+function addRocks(g, seed, rect = { x0: -255, x1: 215, z0: -310, z1: 210 }, count = 70, stacks = true) {
   const r = mulberry32(seed);
   const grey = [C('#8a8173'), C('#776e62'), C('#9b9282')];
   g.surf(DS.ROCK);
   let n = 0;
-  for (let i = 0; i < 2000 && n < 70; i++) {
-    const x = lerp(-255, 215, r()), z = lerp(-310, 210, r());
+  for (let i = 0; i < 2000 && n < count; i++) {
+    const x = lerp(rect.x0, rect.x1, r()), z = lerp(rect.z0, rect.z1, r());
     const h = heightAt(x, z);
     if (h < -1.6 || h > 1.2) continue;
     const s = 0.6 + r() * 1.8;
@@ -384,12 +419,92 @@ function addRocks(g, seed) {
     n++;
   }
   // sea stacks off the headland
-  for (const [x, z, s] of [[92, -34, 4.2], [99, -26, 2.4], [86, -22, 1.7]]) {
+  if (stacks) for (const [x, z, s] of [[92, -34, 4.2], [99, -26, 2.4], [86, -22, 1.7]]) {
     g.add(roughen(new THREE.DodecahedronGeometry(1, 1), 0.3, x), mat(x, heightAt(x, z) + s * 1.2, z, 0.2, x, 0, s, s * 2.2, s), grey[0]);
   }
 }
 
-export function makeWorld(U) {
+// A port island from its spec in ports.js: dock, town in the nation's style, church, lamps, torches,
+// fort with the nation's flag, rocks, terrain and vegetation. Each island is its own set of meshes so
+// the renderer can cull the ones out of view.
+function buildPortIsland(U, P, lights, flags, unlitTorches) {
+  const group = new THREE.Group();
+  const r = mulberry32(P.seed * 101 + 7);
+  const g = new Geo(P.seed, 0.05), gw = new Geo(P.seed + 1, 0);
+  const walls = P.style.walls.map(C), roofs = P.style.roofs.map(C);
+  const dock = addDock(g, gw, lights, P.dock.x, P.dock.zIn, walls[0], roofs[0]);
+  const T = P.town, ax = dock.x, az = dock.zShore;
+  const church = T.church ? { x: ax + T.church[0], z: az + T.church[1] } : null;
+  if (church) addChurch(g, gw, church.x, church.z, (r() - 0.5) * 0.2);
+  const fort = { x: P.fort[0], z: P.fort[1] };
+  const houses = [];
+  for (let t = 0; t < 6000 && houses.length < T.houses; t++) {
+    const x = lerp(ax + T.x[0], ax + T.x[1], r()), z = lerp(az + T.z[0], az + T.z[1], r());
+    const h = heightAt(x, z);
+    if (h < 1.7 || h > 16) continue;
+    if (slopeAt(x, z).s > 0.42) continue;
+    if (Math.abs(x - dock.x) < 9 && z > dock.zShore - 26) continue;
+    if (church && Math.hypot(x - church.x, z - church.z) < 14) continue;
+    if (Math.hypot(x - (dock.x - 13), z - (dock.zShore - 12)) < 12) continue;
+    if (Math.hypot(x - fort.x, z - fort.z) < 30) continue;
+    if (houses.some(o => Math.hypot(o.x - x, o.z - z) < 9.2)) continue;
+    houses.push({ x, z });
+    const tall = r() < P.style.tall, pirate = P.nation === 'pirate', narrow = P.nation === 'dutch';
+    const w = pirate ? 4.2 + r() * 2.4 : narrow ? 4.4 + r() * 2 : 5 + r() * 3.2, d = 4.5 + r() * 2.2;
+    const hgt = tall ? 5.4 + r() * (narrow ? 2.2 : 1.2) : 3.2 + r() * 1.4;
+    addHouse(g, gw, x, z, (r() - 0.5) * 0.5, w, d, hgt, walls[Math.floor(r() * walls.length)], roofs[Math.floor(r() * roofs.length)], r, P.style.glow);
+  }
+  // street lamps on the waterfront
+  g.surf(DS.METAL);
+  for (const off of T.lamps) {
+    const lx = ax + off; let lz = az - 40; while (lz < az + 30 && heightAt(lx, lz) > 1.6) lz += 0.5;
+    const p = V(lx, heightAt(lx, lz - 3), lz - 3);
+    g.rod(p, p.clone().add(V(0, 3.4, 0)), 0.1, 0.07, 5, C('#2b2622'));
+    gw.cyl(0.2, 0.2, 0.4, 6, mat(p.x, p.y + 3.6, p.z), C('#ffffff'));
+    lights.push({ pos: p.clone().add(V(0, 3.7, 0)), color: C('#ffad52'), power: 0.75, kind: 'lamp' });
+  }
+  // torches on the pier head and the quay: their light comes from the shared world-light pool
+  for (const [tx, tz] of [[dock.x - 6.9, dock.end.z - 2.1], [dock.x + 6.9, dock.end.z - 2.1], [dock.x - 2.6, dock.zShore - 3], [dock.x + 2.6, dock.zShore - 3]]) {
+    const ty = tz > dock.zShore - 6 ? 1.45 : heightAt(tx, tz);
+    g.rod(V(tx, ty, tz), V(tx, ty + 2.3, tz), 0.06, 0.05, 5, C('#2b2622'));
+    g.cyl(0.18, 0.1, 0.3, 6, mat(tx, ty + 2.4, tz), C('#2b2622'));
+    unlitTorches.push(V(tx, ty + 2.75, tz));
+    lights.push({ pos: V(tx, ty + 3.2, tz), color: C('#ff8a38'), power: 0.35, kind: 'fire' });
+  }
+  addFort(g, gw, fort.x, fort.z, lights, flags, P.style.flag);
+  addRocks(g, P.seed + 3, P.isle, 22, false);
+
+  const town = new THREE.Mesh(g.build(), U.enhance(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, side: THREE.DoubleSide }), 'town'));
+  town.castShadow = true; town.receiveShadow = true;
+  group.add(town, new THREE.Mesh(gw.build(), U.glowMat));
+  group.add(makeTerrain(U, P.isle, [{ x: ax - 6, z: az - 22, r: 46 }], P.seed));
+
+  const avoid = (x, z) => houses.some(o => Math.hypot(o.x - x, o.z - z) < 6.5) || Math.hypot(x - fort.x, z - fort.z) < 26 || (church && Math.hypot(x - church.x, z - church.z) < 12) || (Math.abs(x - dock.x) < 18 && Math.abs(z - (dock.zShore - 8)) < 14);
+  const share = (P.isle.x1 - P.isle.x0) * (P.isle.z1 - P.isle.z0) / ((215 + 255) * (210 + 310));
+  const palmShare = P.nation === 'pirate' || P.nation === 'spanish' ? 1.5 : 1;
+  group.add(scatter(U, palmGeo(4), Math.round(300 * share * palmShare), (x, z, rr) => {
+    const h = heightAt(x, z);
+    if (h < 0.7 || h > 7) return null;
+    const sl = slopeAt(x, z); if (sl.s > 0.6 || avoid(x, z)) return null;
+    const lean = 0.12 + rr() * 0.3, dir = Math.atan2(-sl.gz, -sl.gx), s = 0.75 + rr() * 0.45;
+    return new THREE.Matrix4().compose(V(x, h - 0.2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -dir, lean, 'YXZ')), V(s, s, s));
+  }, P.seed + 41, {}, P.isle));
+  group.add(scatter(U, treeGeo(6), Math.round(340 * share), (x, z, rr) => {
+    const h = heightAt(x, z);
+    if (h < 3.5 || h > 40 || slopeAt(x, z).s > 0.75 || avoid(x, z)) return null;
+    const s = 0.8 + rr() * 0.7;
+    return mat(x, h - 0.3, z, 0, rr() * 6, 0, s, s * (0.85 + rr() * 0.3), s);
+  }, P.seed + 42, {}, P.isle));
+  group.add(scatter(U, bushGeo(8), Math.round(300 * share), (x, z, rr) => {
+    const h = heightAt(x, z);
+    if (h < 1.3 || h > 28 || avoid(x, z)) return null;
+    const s = 0.6 + rr() * 0.8;
+    return mat(x, h - 0.1, z, 0, rr() * 6, 0, s);
+  }, P.seed + 43, {}, P.isle));
+  return { group, dock, houses: houses.length };
+}
+
+export function makeWorld(U, ports = []) {
   const group = new THREE.Group();
   const lights = [], flags = [];
   const terrain = makeTerrain(U);
@@ -468,5 +583,14 @@ export function makeWorld(U) {
     return mat(x, h - 0.1, z, 0, rr() * 6, 0, s);
   }, 43);
   group.add(palms, trees, bushes);
-  return { group, lights, flags, dock, torches };
+
+  // the other ports, each on its own island
+  const docks = { rosalind: dock }, unlitTorches = [], houseCount = { rosalind: houses.length };
+  for (const P of ports) {
+    if (P.id === 'rosalind') continue;
+    const isle = buildPortIsland(U, P, lights, flags, unlitTorches);
+    group.add(isle.group);
+    docks[P.id] = isle.dock; houseCount[P.id] = isle.houses;
+  }
+  return { group, lights, flags, dock, docks, torches, unlitTorches, houseCount };
 }

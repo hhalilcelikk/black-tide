@@ -116,7 +116,7 @@ kbd{font:inherit;color:var(--amber)}
 /* chart labels and ship marks */
 #marks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .isl{position:absolute;transform:translate(-50%,-50%);font-family:"IM Fell English SC",Georgia,serif;font-size:calc(var(--px)*10);color:#f3e2b8;text-shadow:0 0 calc(var(--px)*3) #000,0 0 var(--px) #000;white-space:nowrap;-webkit-font-smoothing:antialiased}
-.isl.port{color:var(--amber)}
+.isl.harbour{color:var(--amber)} /* not .port: that class is the port screen */
 .mk{position:absolute;width:0;height:0;transform:translate(-50%,-50%)}
 .mk i{position:absolute;left:calc(var(--px)*-4);top:calc(var(--px)*-4);width:calc(var(--px)*8);height:calc(var(--px)*8);clip-path:polygon(50% 0,100% 100%,50% 75%,0 100%)}
 .mk span{position:absolute;left:calc(var(--px)*7);top:calc(var(--px)*-4);white-space:nowrap;text-shadow:var(--px) var(--px) 0 #000;color:var(--tx)}
@@ -183,8 +183,8 @@ kbd{font:inherit;color:var(--amber)}
     <div class="orders" id="orders" hidden>
       <span class="dim">Hand the helm to the AI captain:</span>
       <button data-order="hunt">Hunt nearby prizes</button>
-      <button data-order="port">Sail to Port Rosalind</button>
-      <button disabled title="Needs a second port (milestone 6)">Trade run · later</button>
+      <button data-order="port">Sail to the nearest port</button>
+      <button data-order="trade">Trade run: buy cheap, sell dear</button>
     </div>
     <button id="helmBtn" class="btn go">Take the helm</button>
   </div>
@@ -267,8 +267,8 @@ kbd{font:inherit;color:var(--amber)}
 
   <div class="port" id="port" hidden>
     <div class="plate portnav hi">
-      <h1 class="fell">Port Rosalind</h1>
-      <div class="sub">English colony on Isla Rosalind · Governor Ashby</div>
+      <h1 class="fell" id="portName">Port Rosalind</h1>
+      <div class="sub" id="portSub">English colony on Isla Rosalind · Governor Ashby</div>
       <nav aria-label="Port">
         <button data-port="menu"><i class="ico" data-i="anchor"></i>Harbour</button>
         <button data-port="governor"><i class="ico" data-i="crown"></i>Governor</button>

@@ -36,10 +36,15 @@ async def main():
         except Exception as e:
             print('no __bt', e); print('\n'.join(msgs[:40])); await b.close(); sys.exit(1)
         print('loaded', round(time.time() - t0, 1), 's')
+        async def js(expr, arg=None):
+            # a script expression that throws fails the run with its message instead of crashing the harness
+            try: return (await pg.evaluate(expr, arg)) if arg is not None else (await pg.evaluate(expr)), None
+            except Exception as e: return None, str(e).split('\n')[0][:300]
         for s in steps:
             d = s['do']
             if d == 'advance':
-                st = await pg.evaluate('s => window.__bt.advance(s)', s['sec'])
+                st, err = await js('s => window.__bt.advance(s)', s['sec'])
+                if err: print('advance ERROR:', err); failed.append('the game threw during advance'); break
                 if s.get('print', True): print('t=', st['t'], st['mode'], 'auto' if st['auto'] else 'manual', '|', st['ai'], '| p', st['p'], '| gold', st['gold'], 'rank', st['rank'], 'docked', st['docked'])
                 if s.get('ships'): print('   ', st['ships'])
                 if s.get('log'): print('    log:', st['log'][:5])
@@ -48,11 +53,13 @@ async def main():
                 out = out_path(s['out'])
                 await pg.screenshot(path=out); print('shot', out)
             elif d == 'eval':
-                r = await pg.evaluate(s['js'])
+                r, err = await js(s['js'])
+                if err: print('eval ERROR:', err); failed.append('eval threw: ' + s['js'][:80]); continue
                 if r is not None: print('eval:', json.dumps(r)[:1500])
             elif d == 'expect':
-                r = await pg.evaluate(s['js'])
-                ok = r == s['equals'] if 'equals' in s else bool(r)
+                r, err = await js(s['js'])
+                ok = not err and (r == s['equals'] if 'equals' in s else bool(r))
+                if err: r = 'ERROR ' + err
                 print('expect', 'PASS' if ok else 'FAIL', s.get('msg', s['js']), '' if ok else f'(got {json.dumps(r)[:200]})')
                 if not ok: failed.append(s.get('msg', s['js']))
             elif d == 'key':
@@ -64,8 +71,11 @@ async def main():
             elif d == 'until':
                 ok = False
                 for i in range(int(s.get('max', 120) / s.get('step', 0.5))):
-                    await pg.evaluate('s => window.__bt.advance(s)', s.get('step', 0.5))
-                    if await pg.evaluate(s['js']): ok = True; break
+                    _, err = await js('s => window.__bt.advance(s)', s.get('step', 0.5))
+                    if err: print('advance ERROR:', err); failed.append('the game threw during until'); break
+                    r, err = await js(s['js'])
+                    if err: print('until ERROR:', err); break
+                    if r: ok = True; break
                 st = await pg.evaluate('() => window.__bt.state()')
                 print('until', 'ok' if ok else 'TIMEOUT', 't=', st['t'], st['mode'], st['ai'])
                 if not ok and s.get('required', True): failed.append('until ' + s['js'])

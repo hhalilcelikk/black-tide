@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port and layout (at 1280, 1024 and 1920 wide) through play.py
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -31,6 +31,14 @@ npm test                         # build + smoke, port and layout (at 1280, 1024
 - Source is ES modules in `src/`, bundled by esbuild (`build.mjs`) into `src/template.html`. `dist/` is build output and is never committed.
 - URL flags: `?seed=`, `?skip=attract`, `?gold=`, `?test`, `?capture`. New debug switches go behind a URL flag, not a code edit.
 - Commit small, working steps. The build must pass and `npm test` must be green before a push, because Pages deploys every push to `main`.
+
+## The world and its ports
+
+- Ports are data in `src/ports.js`: nation, town layout, governor, tavern, and the goods each market makes (cheap) and needs (dear). Every harbour faces south. `PORTS` derives each pier, mooring line, harbour and exit from the shoreline, so never hard-code a harbour position.
+- An island is a set of height blobs in `BLOBS` (`src/world.js`) plus an `isle` rectangle in its port spec. Town houses need gentle ground (height 1.7 to 16 m, slope under 0.42). If a town comes out sparse, add a low shelf blob behind the harbour rather than loosening the rules. After changing an island, check that the berth is at least 4 m deep (`heightAt` at both ends of the moored hull) and shoot `tests/ports-stills.json`.
+- `heightAt` skips blobs beyond their reach, using a tile index, so it stays cheap. One 1280² height grid (`heightGrid()`) feeds both the ocean shallows texture and the nav grid.
+- Lights are pooled. A lamp, brazier or torch is a spec in `world.lights`, and main.js lights the 8 nearest with a fixed pool of PointLights. Never add a PointLight per object: the light count must stay fixed or every shader recompiles.
+- Markets keep a per-port price factor `k` that trades move and time restores. Trade runs, traffic and navies all read the same port list.
 
 ## HUD layout
 

@@ -1,10 +1,10 @@
 // Sea navigation: a fine depth grid for grounding and line-of-sight, a coarse grid for A* routes.
-import { heightAt, AREA } from './world.js';
+import { heightGrid } from './world.js';
 
-const F = { x0: AREA.x, z0: AREA.z, size: AREA.size, n: 200 };
-F.cell = F.size / F.n;
-const fine = new Float32Array(F.n * F.n);
-for (let j = 0; j < F.n; j++) for (let i = 0; i < F.n; i++) fine[j * F.n + i] = heightAt(F.x0 + (i + 0.5) * F.cell, F.z0 + (j + 0.5) * F.cell);
+// the fine grid is the world's shared height grid (1.25 m cells over the whole archipelago)
+const HG = heightGrid();
+const F = { x0: HG.x0, z0: HG.z0, n: HG.res, cell: HG.cell };
+const fine = HG.data;
 
 export function groundAt(x, z) {
   const fx = (x - F.x0) / F.cell - 0.5, fz = (z - F.z0) / F.cell - 0.5;

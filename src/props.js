@@ -103,8 +103,8 @@ export function makeCamp(U, fx, cx, cz) {
 }
 
 // People on the quay and the pier head
-export function makeQuayLife(U, dock) {
-  const r = mulberry32(71);
+export function makeQuayLife(U, dock, seed = 0) {
+  const r = mulberry32(71 + seed);
   const g = new Geo(72, 0.05);
   const e = dock.end;
   figure(g, e.x - 4, 1.53, e.z + 0.6, 1.2, r, 'stand');

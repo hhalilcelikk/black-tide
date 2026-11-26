@@ -1,0 +1,78 @@
+[
+ {
+  "do": "eval",
+  "js": "window.__bt.G.handHelm('port'), window.__bt.G.ai.portGoal"
+ },
+ {
+  "do": "until",
+  "js": "window.__bt.G.docked",
+  "max": 200,
+  "step": 1
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.port.id === 'rosalind'",
+  "msg": "docked at Port Rosalind"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const G = window.__bt.G; G.takeHelm(); const before = G.gold, k = G.trade('sugar', 20); window.T = { k, cost: before - G.gold, buyAt: G.prices('rosalind').sugar.buy }; return window.T; })()"
+ },
+ {
+  "do": "expect",
+  "js": "window.T.k === 20 && window.__bt.G.cargo.sugar === 20",
+  "msg": "bought 20 sugar in Port Rosalind"
+ },
+ {
+  "do": "expect",
+  "js": "window.T.cost / 20 < window.__bt.G.prices('vlieg').sugar.sell * 0.7",
+  "msg": "sugar costs far less in Port Rosalind (makes it) than Vlieghaven pays (needs it)"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const G = window.__bt.G, V = G.ports.find(P => P.id === 'vlieg'); G.leavePort(); G.setCourse(G.player, V.x + 8, V.z + 8); G.autoDock = true; G.player.sailSet = 1; return [V.x, V.z]; })()"
+ },
+ {
+  "do": "until",
+  "js": "window.__bt.G.docked",
+  "max": 600,
+  "step": 1
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.port.id === 'vlieg'",
+  "msg": "sailed to Vlieghaven and docked"
+ },
+ {
+  "do": "shot",
+  "out": "shots/trade-vlieghaven.png"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const G = window.__bt.G, before = G.gold, k = G.trade('sugar', -20); window.T.income = G.gold - before; window.T.sold = k; return window.T; })()"
+ },
+ {
+  "do": "expect",
+  "js": "window.T.sold === 20 && window.T.income > window.T.cost * 1.5",
+  "msg": "the sugar sells in Vlieghaven for at least half as much again as it cost"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const m = window.__bt.G.markets.vlieg.sugar; window.T.kAfterSale = m.k; return m.k < 0.92; })()",
+  "msg": "selling 20 sugar pushed Vlieghaven's sugar price down"
+ },
+ {
+  "do": "advance",
+  "sec": 600,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.markets.vlieg.sugar.k > 0.97 && window.__bt.G.markets.vlieg.sugar.k > window.T.kAfterSale",
+  "msg": "ten minutes later the price has recovered"
+ },
+ {
+  "do": "eval",
+  "js": "window.T"
+ }
+]

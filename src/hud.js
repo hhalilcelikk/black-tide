@@ -1,7 +1,8 @@
 // The HUD: Cinderwatch-style pixel plates over the 3D sea, the port screen, and all input.
 import * as THREE from 'three';
 import { CLASSES, NATIONS, TYPES } from './ship.js';
-import { GOODS, SHOTS, ISLANDS, PORT, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
+import { GOODS, SHOTS, ISLANDS, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
+import { PORTS, PORT_BY_ID } from './ports.js';
 import { phaseName } from './looks.js';
 import { isWater } from './nav.js';
 import { mulberry32, shuffled } from './util.js';
@@ -36,7 +37,7 @@ export function createHud(ctx, audio) {
   const { G, view } = ctx;
   for (const el of document.querySelectorAll('.ico[data-i]')) el.innerHTML = svg(el.dataset.i);
   const el = {};
-  for (const id of ['gold', 'hold', 'rank', 'rankT', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
+  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
   const txt = (e, s) => { if (e.textContent !== s) e.textContent = s; };
   const pct = (e, k) => { const v = (Math.max(0, Math.min(1, k)) * 100).toFixed(1) + '%'; if (e.style.width !== v) e.style.width = v; };
 
@@ -79,7 +80,7 @@ export function createHud(ctx, audio) {
       case 'e': if (G.autopilot) take(); G.fire(G.player, 1); break;
       case 'r': cycleShot(); break;
       case 'b': if (G.autopilot) take(); doBoard(); break;
-      case 'f': if (!G.dock()) G.say('Sail into the harbour at ' + PORT.name + ' first.', 'warn'); break;
+      case 'f': if (!G.dock()) G.say('Sail into a harbour first: Port Rosalind, Santa Catalina, Port Lys, Vlieghaven or Hangman\'s Cove.', 'warn'); break;
       case ' ': togglePause(); break;
       case '1': view.set('deck'); break;
       case '2': view.set('chase'); break;
@@ -153,7 +154,8 @@ export function createHud(ctx, audio) {
     if (G.docked) return;
     if (G.autopilot) take();
     // a click on the town or its harbour sails there and docks
-    if (Math.hypot(w.x - PORT.x, w.z - (PORT.z - 50)) < 75 && !isWater(w.x, w.z, -4)) { G.setCourse(G.player, PORT.x + 8, PORT.z + 8); G.autoDock = true; G.say('Course set for ' + PORT.name + '.'); return; }
+    const town = PORTS.find(P => Math.hypot(w.x - P.x, w.z - (P.z - 50)) < 75);
+    if (town && !isWater(w.x, w.z, -4)) { G.setCourse(G.player, town.x + 8, town.z + 8); G.autoDock = true; G.say('Course set for ' + town.name + '.'); return; }
     if (!isWater(w.x, w.z, -3)) { G.say('That is dry land, captain.', 'warn'); return; }
     G.setCourse(G.player, w.x, w.z); G.autoDock = false;
     if (G.player.sailSet < 0.5) G.player.sailSet = 1;
@@ -224,7 +226,7 @@ export function createHud(ctx, audio) {
   }
 
   // ---------- chart marks ----------
-  const isl = ISLANDS.map(i => { const d = document.createElement('div'); d.className = 'isl' + (i.port ? ' port' : ''); d.textContent = i.name; el.marks.appendChild(d); return { i, d }; });
+  const isl = ISLANDS.map(i => { const d = document.createElement('div'); d.className = 'isl' + (i.port ? ' harbour' : ''); if (i.port) d.innerHTML = `<i class="flag ${FLAGS[i.nation]}"></i> `; d.append(i.name); el.marks.appendChild(d); return { i, d }; });
   const marks = new Map();
   function updateMarks() {
     const chart = view.mode === 'chase' && view.vh > 180;
@@ -256,16 +258,27 @@ export function createHud(ctx, audio) {
     'The English frigate Resolution hunts anyone flying the black. Keep your colours furled near the fort.',
     'Calico Ned buried more than rum on Cayo Palma. Ask him and he laughs.',
     'Tobacco sells dear in Port Rosalind this season. Sugar is cheap as sand.',
+    'The Dutch in Vlieghaven will pay well for sugar and timber. They never have enough of either.',
+    "Hangman's Cove buys powder and silver and asks no questions about where it came from.",
+    'Santa Catalina ships silver north under escort. The escorts are thinner every month.',
   ];
+  // one rumour is a real tip from the markets: the best thing to carry from this port, as prices stand
+  function tradeTip(here) {
+    const P0 = G.prices(here); let best = null;
+    for (const g of GOODS) for (const Q of PORTS) { if (Q.id === here) continue; const gain = G.prices(Q.id)[g.id].sell - P0[g.id].buy; if (!best || gain > best.gain) best = { g, Q, gain, buy: P0[g.id].buy, sell: G.prices(Q.id)[g.id].sell }; }
+    return best && best.gain > 4 ? `${best.g.name} costs ${best.buy} a unit here. In ${best.Q.name} they pay ${best.sell}, or so the sailors say.` : 'Nobody here knows of a cargo worth the voyage this week.';
+  }
   function renderPort() {
     const s = G.port ? G.port.screen : 'menu', p = G.player, body = el.portBody;
     for (const b of document.querySelectorAll('[data-port]')) b.setAttribute('aria-pressed', String(b.dataset.port === s));
+    const PD = PORT_BY_ID[G.port ? G.port.id : 'rosalind'];
+    txt(el.portName, PD.name); txt(el.portSub, PD.blurb + ' · ' + PD.governor);
     const head = (h, lede) => `<h2 class="fell">${h}</h2><p class="lede">${lede}</p>`;
     const purse = `<div class="summary"><span class="stat"><i class="ico">${svg('coin')}</i>${fmt(G.gold)} gold</span><span class="stat"><i class="ico">${svg('crate')}</i>${G.holdUsed()}/${p.C.hold} in the hold</span></div>`;
     let h = '';
     if (s === 'menu') {
       const rc = G.repairCost();
-      h = head('The harbour', 'Gulls on the warehouses, tar on the air. A clerk with a ledger waits at the foot of the pier.') + purse +
+      h = head('The harbour', PD.harbour) + purse +
         `<div class="cards">
           <div class="card"><b class="fell">Sell the whole hold</b><span class="dim">At this port's prices</span><button data-act="sellall" ${G.holdUsed() ? '' : 'disabled'}>Sell all</button></div>
           <div class="card"><b class="fell">Repair the ${p.name}</b><span class="dim">${rc ? rc + ' gold for hull and sails' : 'She is sound'}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>Repair</button></div>
@@ -273,9 +286,11 @@ export function createHud(ctx, audio) {
         </div>`;
     } else if (s === 'market') {
       const P = G.port.prices;
-      h = head('Market', 'Prices move with what you sell. Dump a whole hold of rum here and the price will fall.') + purse +
+      const tag = id => PD.makes.includes(id) ? ' <span class="dim">· made here</span>' : PD.needs.includes(id) ? ' <span class="ember">· wanted</span>' : '';
+      const list = ids => { const n = ids.map(id => GOODS.find(g => g.id === id).name.toLowerCase()); return n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0]; };
+      h = head('Market', PD.name + ' makes ' + list(PD.makes) + ' cheap, and pays well for ' + list(PD.needs) + '. Prices move with every sale and drift back over the days.') + purse +
         `<table class="tbl"><tr><th>Goods</th><th>Hold</th><th>Sell</th><th>Buy</th><th></th></tr>` +
-        GOODS.map(g => `<tr><td>${g.name}</td><td>${G.cargo[g.id]}</td><td class="ok">${P[g.id].sell}</td><td class="amber">${P[g.id].buy}</td><td><button data-trade="${g.id}:-10" aria-label="Sell 10 ${g.name}" ${G.cargo[g.id] ? '' : 'disabled'}>−10</button> <button data-trade="${g.id}:10" aria-label="Buy 10 ${g.name}" ${G.gold >= P[g.id].buy && G.holdRoom() > 0 ? '' : 'disabled'}>+10</button></td></tr>`).join('') + `</table>`;
+        GOODS.map(g => `<tr><td>${g.name}${tag(g.id)}</td><td>${G.cargo[g.id]}</td><td class="ok">${P[g.id].sell}</td><td class="amber">${P[g.id].buy}</td><td><button data-trade="${g.id}:-10" aria-label="Sell 10 ${g.name}" ${G.cargo[g.id] ? '' : 'disabled'}>−10</button> <button data-trade="${g.id}:10" aria-label="Buy 10 ${g.name}" ${G.gold >= P[g.id].buy && G.holdRoom() > 0 ? '' : 'disabled'}>+10</button></td></tr>`).join('') + `</table>`;
     } else if (s === 'shipwright') {
       const rc = G.repairCost();
       const up = (k, label, what) => { const c = G.upgradeCost(k); return `<div class="card"><b class="fell">${label} ${'+'.repeat(G.upgrades[k])}</b><span class="dim">${what}</span><button data-up="${k}" ${c !== null && G.gold >= c ? '' : 'disabled'}>${c === null ? 'Fully fitted' : c + ' gold'}</button></div>`; };
@@ -286,13 +301,13 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Ships for sale</h2><p class="lede">Trade-in for your ${CLASSES[p.cls].name.toLowerCase()}: ${tradeIn} gold.</p><div class="cards">` +
         ['sloop', 'schooner', 'brigantine', 'frigate'].map(k => { const C = CLASSES[k]; const own = k === p.cls; return `<div class="card"><b class="fell">${C.name}</b><span class="dim">${C.role}</span><div class="kv"><span>Guns</span><b>${C.guns}</b><span>Crew</span><b>${C.crew}</b><span>Hold</span><b>${C.hold}</b><span>Speed</span><b>${C.knots} kn</b></div><button data-buy="${k}" ${!own && G.gold + tradeIn >= C.price ? '' : 'disabled'}>${own ? 'Your ship' : fmt(C.price) + ' gold'}</button></div>`; }).join('') + `</div>`;
     } else if (s === 'tavern') {
-      const r = (G.port.rumours = G.port.rumours || shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 3));
-      h = head('The Drowned Lantern', 'Low beams, loud dice, a fiddler who knows four tunes. Every one of them is a shanty.') + purse +
+      const r = (G.port.rumours = G.port.rumours || [tradeTip(G.port.id), ...shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 2)]);
+      h = head(PD.tavern, PD.tavernLine) + purse +
         `<div class="cards"><div class="card"><b class="fell">Sign on hands</b><span class="dim">Crew ${Math.round(p.crew)}/${p.maxCrew} · 6 gold a head</span><button data-act="hire10" ${p.crew < p.maxCrew && G.gold >= 60 ? '' : 'disabled'}>Hire 10</button><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire to full</button></div></div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Rumours</h2>` + r.map(x => `<p class="rumour">${x}</p>`).join('');
     } else if (s === 'governor') {
       const st = n => { const v = G.standing[n] || 0; return v > 8 ? '<span class="ok">Friendly</span>' : v > -5 ? 'Wary' : '<span class="ember">Hostile</span>'; };
-      h = head('Governor Ashby', '“Letters of marque are for captains with a name. Come back when the harbour board knows yours.”') +
+      h = head(PD.governor, PD.govLine) +
         `<table class="tbl"><tr><th>Nation</th><th>Standing</th><th>Letter of marque</th></tr>` +
         ['english', 'spanish', 'french', 'dutch'].map(n => `<tr><td><i class="flag ${FLAGS[n]}"></i> ${NATIONS[n].name}</td><td>${st(n)}</td><td>${n === 'english' && G.rank !== null && G.rank <= 45 ? '<button disabled>Offered</button>' : '<span class="dim">Reach #45</span>'}</td></tr>`).join('') + `</table>` +
         `<p class="dim">Contracts, promotions and rewards arrive with the career milestone.</p>`;

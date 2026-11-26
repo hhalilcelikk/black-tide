@@ -5,6 +5,7 @@ import { buildShip, CLASSES, TYPES, LIVERIES, NATIONS } from './ship.js';
 import { waveHeight } from './waves.js';
 import { groundAt, route, clearLine, isWater } from './nav.js';
 import { mulberry32 } from './util.js';
+import { PORTS, PORT_BY_ID, nearestPort } from './ports.js';
 
 const TAU = Math.PI * 2, D2R = Math.PI / 180, KN = 0.75; // game metres per second per knot
 export const wrap = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
@@ -20,21 +21,27 @@ export const GOODS = [
 export const SHOTS = { round: { name: 'Round shot', range: 190, speed: 92, hull: 2.8, sails: 0.4, crew: 0.45 }, chain: { name: 'Chain shot', range: 140, speed: 84, hull: 0.4, sails: 5.2, crew: 0.2 }, grape: { name: 'Grape shot', range: 95, speed: 74, hull: 0.12, sails: 0.3, crew: 1.3 } };
 const GUNW = { sloop: 0.8, schooner: 0.85, brigantine: 1, fluyt: 0.9, frigate: 1.1, galleon: 1.1, manowar: 1.3 };
 
-export const PORT = { name: 'Port Rosalind', nation: 'english', x: -40, z: -48, r: 70, moorZ: -63.2 };
+// chart labels: islands, and every port at its town (port: the port's id)
 export const ISLANDS = [
-  { name: 'Isla Rosalind', x: -60, z: -190 }, { name: 'Port Rosalind', x: -40, z: -108, port: true }, { name: 'Lantern Rock', x: -186, z: 70 },
+  { name: 'Isla Rosalind', x: -60, z: -190 }, { name: 'Lantern Rock', x: -186, z: 70 },
   { name: 'Cayo Palma', x: 152, z: 44 }, { name: 'Gull Cay', x: 36, z: 170 }, { name: 'The Teeth', x: 94, z: -30 },
+  { name: 'Isla Catalina', x: -580, z: 320 }, { name: 'Île de Lys', x: 640, z: -40 }, { name: 'Meeuweneiland', x: 392, z: -610 }, { name: 'Isla Calavera', x: -612, z: -580 },
+  ...PORTS.map(P => ({ name: P.name, x: P.x, z: P.zShore - 12, port: P.id, nation: P.nation })),
 ];
+const TRADERS = PORTS.filter(P => P.nation !== 'pirate'); // merchant traffic sails between these
+const EDGES = [[-760, 230], [760, -140], [760, 260], [-760, 60], [-700, -420], [720, 330], [740, -380], [-720, 300], [620, 520], [-620, 480], [760, 120], [-760, 260]];
+const MERCHANT_CLS = { spanish: ['galleon', 'galleon', 'schooner', 'sloop'], dutch: ['fluyt', 'fluyt', 'schooner'], english: ['schooner', 'fluyt', 'sloop'], french: ['schooner', 'sloop', 'fluyt'] };
 export const RIVALS = [
   ['Calico Ned Rourke', 'pirate'], ['Anne Mercer', 'english'], ['Jean-Baptiste Larue', 'french'], ['Diego Salas, el Cuervo', 'spanish'], ['Hendrik de Vries', 'dutch'],
   ['Mad Isabeau', 'pirate'], ['Silas Thorne', 'pirate'], ['Red Kate Doyle', 'pirate'], ['Tom Gallows', 'pirate'], ['Bartholomew Crane', 'english'],
   ['Lucas van Aert', 'dutch'], ['Mateo Ibarra', 'spanish'], ['Old Pew Harrow', 'pirate'], ['Josiah Blackwood', 'english'], ['Celeste Marchand', 'french'],
 ];
 const NAMES = {
-  spanish: ['Santa Rosa', 'San Felipe', 'La Concepción', 'Nuestra Señora del Mar', 'San Telmo', 'La Dorada'],
-  english: ['Swallow', 'Kingfisher', 'Resolution', 'Hart', 'Lark', 'Greyhound'],
-  french: ['Le Faucon', 'La Belle', "L'Hermine", 'Le Dauphin'], dutch: ['Gouden Leeuw', 'De Zeemeeuw', 'Witte Valk', 'Hoop'],
-  pirate: ['Revenge', 'Black Gull', 'Merry Widow', 'Sea Wolf'],
+  spanish: ['Santa Rosa', 'San Felipe', 'La Concepción', 'Nuestra Señora del Mar', 'San Telmo', 'La Dorada', 'San Jerónimo', 'La Paloma', 'Santa Inés', 'El Halcón'],
+  english: ['Swallow', 'Kingfisher', 'Resolution', 'Hart', 'Lark', 'Greyhound', 'Speedwell', 'Mary Rose', 'Diligence', 'Falcon'],
+  french: ['Le Faucon', 'La Belle', "L'Hermine", 'Le Dauphin', 'La Licorne', 'Le Vautour', 'La Sirène', "L'Aigle"],
+  dutch: ['Gouden Leeuw', 'De Zeemeeuw', 'Witte Valk', 'Hoop', 'Eendracht', 'De Liefde', 'Zwarte Arend', 'Vrede'],
+  pirate: ['Revenge', 'Black Gull', 'Merry Widow', 'Sea Wolf', 'Night Heron', 'Rook', 'Bloody Mary', 'Gallows Bird'],
 };
 
 export function polar(off, C) {
@@ -66,6 +73,23 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     upgrades: { hull: 0, sails: 0, guns: 0 }, tutorial: true,
     on(ev, f) { (listeners[ev] || (listeners[ev] = [])).push(f); },
   };
+  // ---------------- markets ----------------
+  // Each port makes some goods (cheap) and needs others (dear). Trading moves a port's price a little per
+  // unit (k), and k drifts back to 1 with a four-minute time constant. A separate seeded stream sets the
+  // small differences in the other prices, so the market never shifts the simulation's random numbers.
+  const mrnd = mulberry32((seed ^ 0x6d61726b) >>> 0);
+  G.markets = Object.fromEntries(PORTS.map(P => [P.id, Object.fromEntries(GOODS.map(g => [g.id, { mod: P.makes.includes(g.id) ? 0.62 : P.needs.includes(g.id) ? 1.5 : 0.9 + mrnd() * 0.2, k: 1 }]))]));
+  const unitSell = (g, m) => Math.max(1, Math.round(g.base * m.mod * m.k));
+  const unitBuy = (g, m) => { const s = unitSell(g, m); return Math.max(s + 1, Math.round(s * 1.12)); };
+  G.prices = id => Object.fromEntries(GOODS.map(g => { const m = G.markets[id][g.id]; return [g.id, { sell: unitSell(g, m), buy: unitBuy(g, m) }]; }));
+  G.marketT = 0;
+  function stepMarkets(dt) {
+    G.marketT += dt; if (G.marketT < 1) return;
+    const f = 1 - Math.exp(-G.marketT / 240); G.marketT = 0;
+    for (const id in G.markets) for (const g in G.markets[id]) { const m = G.markets[id][g]; m.k += (1 - m.k) * f; }
+  }
+  G.tradeProfit = 0; G.trades = []; G.ports = PORTS; G.arrivals = [];
+
   const say = (text, kind = 'info') => { G.log.unshift({ text, kind, t: G.t }); G.log.length = Math.min(G.log.length, 6); emit('log', { text, kind }); };
   G.say = say;
   const flash = (text, sub, dur = 4) => { G.banner = { text, sub, t: G.t, dur }; };
@@ -157,7 +181,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (s.state !== 'docked' && s.state !== 'sinking') {
       s.psi = wrap(s.psi - s.rudder * rate * dt);
       // in irons the bows pay off on their own
-      if (!s.tacking && off < (C.point - 4) * D2R && s.v < 2.2 && s.sailAmt > 0.2) s.psi = wrap(s.psi + (Math.sign(wrap(s.psi - w.from)) || 1) * 0.09 * dt);
+      if (!s.tacking && !s.towed && off < (C.point - 4) * D2R && s.v < 2.2 && s.sailAmt > 0.2) s.psi = wrap(s.psi + (Math.sign(wrap(s.psi - w.from)) || 1) * 0.09 * dt);
     }
     const side = Math.sign(wrap(w.from - s.psi)) || 1;
     const heelT = side * 0.09 * s.sailAmt * Math.sin(off) * Math.min(1.3, w.speed) * (s.state === 'sail' || s.state === 'engage' || s.state === 'flee' ? 1 : 0.3);
@@ -212,6 +236,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.sideTo = sideTo;
   function fire(s, side, aimAt) {
     if (s.reload[side] > 0 || s.state === 'struck' || s.state === 'sinking' || s.state === 'docked' || s.state === 'boarding') return false;
+    if (s.role === 'player' && aimAt && aimAt.role !== 'pirate') s.aggroT = G.t;
     const shot = SHOTS[s.shot];
     const guns = side > 0 ? s.mesh.guns.star : s.mesh.guns.port;
     let d = 150;
@@ -433,6 +458,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (!G.canBoard(a, b)) return false;
     G.boarding = { a, b, t: 0, p: odds(a, b), roll: G.attract && a.role === 'player' && !G.prizes ? 0 : rnd(), side: sideTo(a, b) }; // the trailer's first prize always falls
     a.state = 'boarding'; b.prevState = b.state; b.state = 'boarding'; a.sailSet = 0; a.rudder = 0; b.rudder = 0;
+    if (a.role === 'player' && b.role !== 'pirate') a.aggroT = G.t;
     emit('board', G.boarding);
     if (a.role === 'player') say('Grapples away! Boarding the ' + b.name + '.', 'info');
     return true;
@@ -490,7 +516,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       b.role = 'player'; b.nation = 'pirate'; b.crew = Math.max(12, Math.round(old.crew * 0.85)); b.morale = 1; b.state = 'sail'; b.sailSet = 1; b.mesh.setFlag('jolly'); b.flagKind = 'jolly';
       b.hull = Math.max(b.hull, b.maxHull * 0.5); b.sails = Math.max(b.sails, b.maxSails * 0.5);
       old.role = 'merchant'; old.nation = 'pirate'; old.state = 'sail'; old.crew = Math.max(6, Math.round(old.crew * 0.15)); old.dest = 'port'; old.prize = true;
-      old.path = route(old.x, old.z, PORT.x, PORT.z - 10); old.wp = 0;
+      const home = nearestPort(old.x, old.z); old.path = route(old.x, old.z, home.x, home.z - 10); old.wp = 0;
       G.player = b; G.selected = null;
       say('The ' + b.name + ' is your flagship now. A prize crew takes the ' + old.name + ' to port.', 'good');
       emit('flagship', b);
@@ -517,46 +543,47 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.title = () => G.rank === null ? 'Nobody' : G.rank > 40 ? 'Sea Rat' : G.rank > 20 ? 'Freebooter' : G.rank > 5 ? 'Captain of Renown' : 'Legend of the Caribbean';
 
   // ---------------- port ----------------
-  G.nearPort = s => Math.hypot(s.x - PORT.x, s.z - PORT.z) < PORT.r;
-  G.moor = (s) => {
-    const z = PORT.moorZ + s.T.B / 2 + 2.8;
-    return { x: PORT.x, z, psi: 0 };
-  };
+  G.portAt = s => { const P = nearestPort(s.x, s.z); return Math.hypot(s.x - P.x, s.z - P.z) < P.r ? P : null; };
+  G.nearPort = s => !!G.portAt(s);
+  G.dockPort = PORTS[0];
+  G.moor = (s, P = G.dockPort) => ({ x: P.x, z: P.moorZ + s.T.B / 2 + 2.8, psi: 0 });
+  const openPort = P => ({ id: P.id, screen: 'menu', t: G.t, rumourSeed: Math.floor(rnd() * 2 ** 32), get prices() { return G.prices(this.id); } });
   function stepDocking(s, dt) {
     const m = G.moor(s), d = Math.hypot(m.x - s.x, m.z - s.z);
     if (d > 9) {
       const want = headingTo(m.x - s.x, m.z - s.z);
       steerTo(s, d > 70 ? avoid(s, want) : want); s.sailSet = d > 40 ? 0.5 : 0.25;
-      s.v = Math.min(s.v, 1.2 + d * 0.05);
+      // the harbour boats take her in tow, so she reaches the quay whatever the wind (in irons she would stall)
+      s.towed = true;
+      s.v = Math.min(Math.max(s.v, Math.min(2.6, 0.8 + d * 0.03)), 1.2 + d * 0.05);
       return false;
     }
     const k = 1 - Math.exp(-dt * 1.2);
     s.x += (m.x - s.x) * k; s.z += (m.z - s.z) * k; s.psi = wrap(s.psi + wrap(m.psi - s.psi) * k); s.v *= 0.9; s.sailSet = 0; s.rudder = 0; s.tacking = null;
     return d < 1.2 && Math.abs(wrap(m.psi - s.psi)) < 0.06;
   }
-  G.dock = () => { const p = G.player; if (G.docked || G.docking || p.state === 'sinking') return false; if (!G.nearPort(p)) return false; G.docking = true; p.path = null; G.course = null; say('Making for the quay at ' + PORT.name + '.'); return true; };
+  G.dock = () => { const p = G.player; if (G.docked || G.docking || p.state === 'sinking') return false; const P = G.portAt(p); if (!P) return false; G.dockPort = P; G.docking = true; p.path = null; G.course = null; say('Making for the quay at ' + P.name + '.'); return true; };
   function arrive() {
-    const p = G.player; G.docking = false; G.docked = true; p.state = 'docked'; p.v = 0; p.rudder = 0; p.mesh.setFurled(true);
-    G.port = { screen: 'menu', t: G.t, prices: portPrices(), rumourSeed: Math.floor(rnd() * 2 ** 32) };
-    // sell everything automatically for the AI captain
-    say('Docked at ' + PORT.name + '.', 'good');
+    const p = G.player; G.docking = false; G.docked = true; p.towed = false; p.state = 'docked'; p.v = 0; p.rudder = 0; p.mesh.setFurled(true);
+    G.port = openPort(G.dockPort);
+    say('Docked at ' + G.dockPort.name + '.', 'good');
     emit('dock', p);
   }
   G.leavePort = () => {
     const p = G.player; if (!G.docked) return;
     G.docked = false; G.port = null; p.state = 'sail'; p.mesh.setFurled(false); p.sailSet = 0.5; p.psi = -Math.PI / 2 + 0.25; p.v = 1.5;
-    G.setCourse(p, PORT.x + 30, PORT.z + 110);
+    G.setCourse(p, ...G.dockPort.exit);
     emit('undock', p);
   };
-  function portPrices() {
-    const mod = { sugar: 0.8, rum: 0.9, tobacco: 1.25, cloth: 1.3, spices: 1.15, timber: 0.85, powder: 1.0, silver: 1.05 };
-    return Object.fromEntries(GOODS.map(g => { const p = Math.round(g.base * mod[g.id] * (0.94 + rnd() * 0.12)); return [g.id, { buy: Math.round(p * 1.12), sell: p }]; }));
-  }
-  G.trade = (id, n) => { // n > 0 buy, n < 0 sell
-    const P = G.port && G.port.prices[id]; if (!P) return;
-    if (n > 0) { const k = Math.min(n, holdRoom(), Math.floor(G.gold / P.buy)); if (k <= 0) return; G.cargo[id] += k; G.gold -= k * P.buy; P.buy = Math.round(P.buy * (1 + 0.004 * k)); P.sell = Math.round(P.sell * (1 + 0.003 * k)); }
-    else { const k = Math.min(-n, G.cargo[id]); if (k <= 0) return; G.cargo[id] -= k; G.gold += k * P.sell; P.sell = Math.max(1, Math.round(P.sell * (1 - 0.006 * k))); P.buy = Math.max(P.sell + 1, Math.round(P.buy * (1 - 0.004 * k))); }
-    emit('coin', n);
+  // n > 0 buys, n < 0 sells, one unit at a time so a big lot moves the price as it goes; returns units traded
+  G.trade = (id, n) => {
+    if (!G.port) return 0;
+    const g = GOODS.find(x => x.id === id), m = G.markets[G.port.id][id];
+    let k = 0;
+    if (n > 0) { for (; k < n && holdRoom() > 0 && G.gold >= unitBuy(g, m); k++) { G.gold -= unitBuy(g, m); G.cargo[id]++; m.k = Math.min(2.5, m.k * 1.004); } }
+    else { for (; k < -n && G.cargo[id] > 0; k++) { G.gold += unitSell(g, m); G.cargo[id]--; m.k = Math.max(0.4, m.k * 0.994); } }
+    if (k) emit('coin', n);
+    return k;
   };
   G.sellAll = () => { let total = 0; for (const g of GOODS) { const n = G.cargo[g.id]; if (n > 0) { const before = G.gold; G.trade(g.id, -n); total += G.gold - before; } } return total; };
   G.repairCost = () => { const p = G.player; return Math.round((p.maxHull - p.hull) * 4 + (p.maxSails - p.sails) * 2.5); };
@@ -578,23 +605,32 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   };
 
   // ---------------- traffic ----------------
-  const LANES = [
-    [[-760, 230], [760, -140]], [[760, 260], [-760, 60]], [[-700, -420], [720, 330]], [[740, -380], [-720, 300]],
-    [[620, 520], [PORT.x, PORT.z]], [[-620, 480], [PORT.x, PORT.z]], [[PORT.x, PORT.z], [760, 120]], [[PORT.x, PORT.z], [-760, 260]],
-  ];
+  // Merchants sail from one trading port to another with the goods their home port makes. Navies sail
+  // patrols between their own ports and the others; pirates put out from Hangman's Cove. A ship never
+  // appears in a harbour the player can see: it comes in from the edge of the chart instead.
+  const farFromPlayer = ([x, z]) => !G.player || Math.hypot(x - G.player.x, z - G.player.z) > 450;
   function spawnTraffic(role, near) {
-    let lane = pick(LANES);
-    let [a, b] = lane;
-    const cls = role === 'navy' ? pick(['frigate', 'frigate', 'sloop', 'schooner']) : role === 'pirate' ? pick(['sloop', 'schooner', 'brigantine']) : pick(['fluyt', 'galleon', 'galleon', 'fluyt', 'schooner', 'sloop']);
-    const nation = role === 'pirate' ? 'pirate' : role === 'navy' ? pick(['english', 'english', 'spanish', 'french']) : cls === 'fluyt' ? 'dutch' : cls === 'galleon' ? 'spanish' : pick(['english', 'french', 'spanish', 'dutch']);
-    let [x, z] = a;
-    if (near) { x = near[0]; z = near[1]; }
-    if (!isWater(x, z, -6)) { x = a[0]; z = a[1]; }
-    const goods = {}; if (role === 'merchant') for (let i = 0; i < 2 + Math.floor(rnd() * 2); i++) { const g = pick(GOODS); goods[g.id] = (goods[g.id] || 0) + Math.round(rr(8, 26) * (cls === 'galleon' || cls === 'fluyt' ? 1.8 : 1)); }
+    let from, to, nation;
+    if (role === 'merchant') { from = pick(TRADERS); to = pick(TRADERS.filter(P => P !== from)); nation = from.nation; }
+    else if (role === 'navy') { from = pick(TRADERS); to = pick(PORTS.filter(P => P !== from && P.nation !== 'pirate')); nation = from.nation; }
+    else { from = PORT_BY_ID.cove; to = pick(TRADERS); nation = 'pirate'; }
+    let start = from.exit;
+    if (!farFromPlayer(start)) start = pick(EDGES.filter(farFromPlayer)) || pick(EDGES);
+    let [x, z] = near || start;
+    if (!isWater(x, z, -6)) [x, z] = start;
+    const cls = role === 'navy' ? pick(['frigate', 'frigate', 'sloop', 'schooner']) : role === 'pirate' ? pick(['sloop', 'schooner', 'brigantine']) : pick(MERCHANT_CLS[nation]);
+    const goods = {};
+    if (role === 'merchant') for (let i = 0; i < 2 + Math.floor(rnd() * 2); i++) { const g = pick(from.makes.length && rnd() < 0.75 ? from.makes : GOODS.map(x => x.id)); goods[g] = (goods[g] || 0) + Math.round(rr(8, 26) * (cls === 'galleon' || cls === 'fluyt' ? 1.8 : 1)); }
     const gold = role === 'merchant' ? Math.round(cls === 'galleon' ? rr(600, 1300) : cls === 'fluyt' ? rr(350, 700) : rr(150, 360)) : Math.round(rr(80, 260));
+    const b = role === 'merchant' ? [to.x + 10, to.z + 6] : to.exit;
     const s = spawn({ cls, nation, role, x, z, psi: headingTo(b[0] - x, b[1] - z), v: 3, gold, cargo: goods, morale: role === 'merchant' ? 0.7 : role === 'navy' ? 1.1 : 1 });
-    s.dest = b; s.path = route(x, z, b[0], b[1]); s.wp = 0;
+    s.dest = b; s.destPort = to.id; s.path = route(x, z, b[0], b[1]); s.wp = 0;
     return s;
+  }
+  // a patrol that reaches its port turns for another
+  function nextPatrol(s) {
+    const to = pick(PORTS.filter(P => P.id !== s.destPort && (s.role === 'pirate' ? P.nation !== 'pirate' : true)));
+    s.destPort = to.id; s.dest = to.exit; s.path = route(s.x, s.z, ...to.exit); s.wp = 0;
   }
   G.spawnTraffic = spawnTraffic;
   function populate(dt) {
@@ -602,13 +638,13 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (G.spawnT > 0) return;
     G.spawnT = 4;
     const n = r => G.ships.filter(s => s.role === r && s.alive && s.state !== 'sinking').length;
-    if (n('merchant') < 3) spawnTraffic('merchant');
-    else if (n('navy') < 1 && G.t > 120) spawnTraffic('navy');
-    else if (n('pirate') < 1 && G.t > 200) spawnTraffic('pirate');
+    if (n('merchant') < 6) spawnTraffic('merchant');
+    else if (n('navy') < 2 && G.t > 120) spawnTraffic('navy');
+    else if (n('pirate') < 2 && G.t > 200) spawnTraffic('pirate');
     // drop ships that have left the chart
     for (const s of [...G.ships]) {
       if (s.role === 'player' || G.boarding && (G.boarding.a === s || G.boarding.b === s)) continue;
-      const far = Math.hypot(s.x, s.z + 40) > 820, away = Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420;
+      const far = Math.hypot(s.x, s.z + 40) > 1150, away = Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420;
       if ((far && away) || (s.arrived && away)) remove(s);
     }
   }
@@ -639,7 +675,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
         return;
       }
       s.state = 'sail'; s.sailSet = 1;
-      if (followPath(s, 40)) { s.arrived = true; s.sailSet = 0.3; }
+      if (followPath(s, 40)) { if (!s.arrived) { G.arrivals.push({ t: Math.round(G.t), ship: s.name, port: s.destPort }); emit('arrive', s); } s.arrived = true; s.sailSet = 0.3; }
       return;
     }
     // navy and pirates hunt
@@ -647,10 +683,14 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     let tgt = null;
     if (s.threat && s.threat.alive && s.threat.state !== 'sinking' && G.t - s.threatT < 90) tgt = s.threat;
     else if (foe && fd < range && (s.role === 'pirate' ? foe.role === 'merchant' || (foe.role === 'player' && foe.C.guns <= s.C.guns * 1.2) : foe.role === 'player' || foe.role === 'pirate')) tgt = foe;
-    // navies chase a pirate that has been preying on their flag, or one that sails too close
-    if (s.role === 'navy' && tgt === P && s.threat !== P && !((G.standing[s.nation] || 0) < -2 || fd < 170)) tgt = null;
-    // the fort covers the harbour: hunters break off near Port Rosalind, and give up a long stern chase
-    if (tgt && (Math.hypot(tgt.x - PORT.x, tgt.z - PORT.z) < 150 || Math.hypot(tgt.x - s.x, tgt.z - s.z) > range * 1.35)) { if (s.threat === tgt) s.threat = null; tgt = null; }
+    // navies always hunt a pirate when their nation is hostile to you; otherwise only one that is wanted
+    // (fired on or boarded an honest ship in the last ten minutes) and sails too close. Honest traders pass.
+    if (s.role === 'navy' && tgt === P && s.threat !== P) {
+      const hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - (P.aggroT ?? -1e9) < 600;
+      if (!hostileNation && !(wanted && fd < 170)) tgt = null;
+    }
+    // the forts cover the harbours: hunters break off near any port, and give up a long stern chase
+    if (tgt) { const hp = nearestPort(tgt.x, tgt.z); if (Math.hypot(tgt.x - hp.x, tgt.z - hp.z) < 150 || Math.hypot(tgt.x - s.x, tgt.z - s.z) > range * 1.35) { if (s.threat === tgt) s.threat = null; tgt = null; } }
     if (tgt && tgt.state !== 'docked') {
       s.state = 'engage'; s.target = tgt; s.shot = 'round';
       if (s.role === 'pirate' && tgt.state === 'struck') { if (G.canBoard(s, tgt)) G.board(s, tgt); else engage(s, tgt, 'board'); }
@@ -658,7 +698,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       return;
     }
     s.state = 'sail'; s.sailSet = 0.8; s.target = null;
-    if (followPath(s, 40)) { s.arrived = true; }
+    if (followPath(s, 40)) { if (s.destPort) nextPatrol(s); else s.arrived = true; }
   }
 
   // ---------------- AI captain ----------------
@@ -673,11 +713,102 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const value = (o.gold || 50) + Object.values(o.cargo || {}).reduce((a, b) => a + b, 0) * 25;
     return value * od / (80 + d);
   }
+  // ---- trade runs: buy what is cheap here, sail to the port that pays most for it, sell, repeat ----
+  const goodName = id => GOODS.find(g => g.id === id).name.toLowerCase();
+  const legDist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  // the best cargo to carry from port `here` (by expected profit per metre, with price slippage), or, when
+  // nothing pays from here, the port to sail to empty because the best cargo waits there; null if nothing pays
+  function planTrade(here) {
+    const reserve = 120, room = holdRoom();
+    let best = null;
+    // at sea (here.id null) there is nothing to buy where we are: only the empty-run plan below applies
+    if (here.id) for (const g of GOODS) for (const Q of PORTS) {
+      const P0 = G.prices(here.id);
+      if (Q === here) continue;
+      const buy = P0[g.id].buy, sell = G.prices(Q.id)[g.id].sell;
+      const qty = Math.min(room, Math.floor((G.gold - reserve) / (buy * 1.05)));
+      if (qty < 5) continue;
+      const profit = qty * (sell * (1 - 0.003 * qty) - buy * (1 + 0.002 * qty));
+      const score = profit / (legDist(here, Q) + 250);
+      if (profit > qty * 3 && (!best || score > best.score)) best = { good: g.id, dest: Q.id, qty, score, profit };
+    }
+    if (best) return best;
+    let empty = null;
+    for (const R of PORTS) {
+      if (R === here) continue;
+      const PR = G.prices(R.id);
+      for (const g of GOODS) for (const Q of PORTS) {
+        if (Q === R) continue;
+        const units = Math.min(room, Math.floor((G.gold - 120) / (PR[g.id].buy * 1.05)));
+        if (units < 5) continue;
+        const spread = G.prices(Q.id)[g.id].sell * 0.85 - PR[g.id].buy * 1.1;
+        const score = spread * units / (legDist(here, R) + legDist(R, Q) + 500);
+        if (spread > 4 && (!empty || score > empty.score)) empty = { good: null, dest: R.id, next: g.id, score };
+      }
+    }
+    return empty;
+  }
+  // handed a trade run at sea: take what we carry where it sells best, or go where the best cargo is
+  function planAtSea(p) {
+    if (holdUsed() > 0) {
+      let best = null;
+      for (const Q of PORTS) { const P = G.prices(Q.id), v = GOODS.reduce((a, g) => a + G.cargo[g.id] * P[g.id].sell, 0) / (Math.hypot(Q.x - p.x, Q.z - p.z) + 250); if (!best || v > best.v) best = { dest: Q.id, v }; }
+      return { good: null, dest: best.dest, cost: null };
+    }
+    const near = nearestPort(p.x, p.z, P => P.nation !== 'pirate');
+    if (planTrade(near)) return { good: null, dest: near.id }; // something worth buying at the nearest port: start there
+    return planTrade({ id: null, x: p.x, z: p.z }) || { good: null, dest: near.id };
+  }
+  function tradeInPort(dt) {
+    const p = G.player, A = G.ai, here = G.dockPort;
+    if (A.portT > 1.5 && !A.sold) {
+      const T = A.trade;
+      // a stop for repairs on the way: the cargo stays aboard for the port that pays for it
+      if (T && T.bought && T.dest !== here.id && G.cargo[T.good] > 0) {
+        if (p.hull < p.maxHull * 0.9 && G.gold > G.repairCost()) G.repair();
+        if (p.crew < p.maxCrew * 0.5) G.hire(Math.round(p.maxCrew * 0.6 - p.crew));
+      }
+      // ...unless she still is not fit for sea: then the cargo is sold here to pay for the refit
+      if (T && T.bought && T.dest !== here.id && G.cargo[T.good] > 0 && p.hull >= p.maxHull * 0.6 && p.crew >= p.maxCrew * 0.45) {
+        say('Trade run: refitting in ' + here.name + '. The ' + goodName(T.good) + ' stays aboard for ' + PORT_BY_ID[T.dest].name + '.', 'info');
+        A.sold = true; A.tradeWait = 0;
+        return;
+      }
+      const carried = holdUsed(), sold = G.sellAll();
+      if (sold > 0) {
+        const profit = T && T.cost != null ? sold - T.cost : null;
+        if (profit !== null) G.tradeProfit += profit;
+        G.trades.push({ t: Math.round(G.t), port: here.id, good: T && T.good, sold, profit });
+        say('Trade run: sold ' + carried + ' ' + (T && T.good ? goodName(T.good) : 'goods') + ' in ' + here.name + ' for ' + sold + ' gold' + (profit !== null ? ' (' + (profit >= 0 ? '+' : '') + profit + ')' : '') + '.', profit === null || profit >= 0 ? 'good' : 'warn');
+        emit('trade', { port: here.id, sold, profit });
+      }
+      if (p.hull < p.maxHull * 0.9 && (G.gold - G.repairCost() > 200 || p.hull < p.maxHull * 0.6)) G.repair();
+      if (p.crew < p.maxCrew * 0.5) G.hire(Math.round(p.maxCrew * 0.6 - p.crew));
+      A.sold = true; A.trade = planTrade(here); A.tradeWait = 0;
+      if (!A.trade) say('Trade run: no cargo pays from ' + here.name + '. Waiting for prices to recover.', 'warn');
+    }
+    if (!A.sold || A.portT < 4) return;
+    if (!A.trade) { // prices recover over minutes: look again every 20 s
+      A.msg = 'Trade run: waiting in ' + here.name + ' for prices to recover';
+      A.tradeWait += dt; if (A.tradeWait > 20) { A.tradeWait = 0; A.trade = planTrade(here); }
+      return;
+    }
+    const T = A.trade, dest = PORT_BY_ID[T.dest];
+    if (T.bought) { /* resuming after a refit: the cargo is already aboard */ }
+    else if (T.good) {
+      const before = G.gold, k = G.trade(T.good, T.qty);
+      T.cost = before - G.gold; T.qty = k; T.bought = true;
+      say('Trade run: bought ' + k + ' ' + goodName(T.good) + ' in ' + here.name + ' at ' + Math.round(T.cost / Math.max(1, k)) + ' a unit, for ' + dest.name + '.', 'info');
+    } else say('Trade run: sailing empty to ' + dest.name + ' for its ' + (T.next ? goodName(T.next) : 'cargo') + '.', 'info');
+    A.sold = false; A.pathFor = null; G.leavePort();
+  }
+
   function captain(dt) {
     const p = G.player, A = G.ai;
     if (G.docked) {
       A.portT += dt;
-      if (G.attract || G.order === 'hunt') {
+      if (G.order === 'trade' && !G.attract) tradeInPort(dt);
+      else if (G.attract || G.order === 'hunt') {
         if (A.portT > 1.5 && !A.sold) { const s = G.sellAll(); if (s > 0) say('Sold the cargo for ' + s + ' gold.', 'good'); A.sold = true; A.toPort = false; if (p.hull < p.maxHull * 0.95) G.repair(); if (p.crew < p.maxCrew * 0.9) G.hire(Math.round(p.maxCrew - p.crew)); }
         if (A.portT > (G.attract ? 9 : 4)) { A.sold = false; G.leavePort(); A.phase = 'look'; }
       }
@@ -688,29 +819,46 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (G.loot) { A.lootT = (A.lootT || 0) + dt; if (A.lootT > 1.6) { G.takeLoot('cargo'); A.lootT = 0; if (G.attract && G.prizes === 1) A.toPort = true; } return; }
     if (p.state === 'boarding') return;
     // a heavier warship on our tail: run, for port if it lies away from her, firing when she comes abeam
+    const trader = G.order === 'trade' && !G.attract;
     let danger = null, dd = 320;
     for (const o of G.ships) {
-      if (!o.alive || o.state !== 'engage' || o.target !== p || (o.role !== 'navy' && o.role !== 'pirate') || o.C.guns <= p.C.guns * 0.9) continue;
+      if (!o.alive || o.state !== 'engage' || o.target !== p || (o.role !== 'navy' && o.role !== 'pirate') || (!trader && o.C.guns <= p.C.guns * 0.9)) continue;
       const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < dd) { dd = d; danger = o; }
     }
     if (danger) {
       A.phase = 'flee'; A.msg = 'Running from the ' + danger.name; A.pathFor = null; p.path = null; G.selected = danger;
-      if (Math.hypot(p.x - PORT.x, p.z - PORT.z) < 60) { G.dock(); return; }
-      const away = headingTo(p.x - danger.x, p.z - danger.z), home = headingTo(PORT.x - p.x, PORT.z - p.z);
-      const want = Math.abs(wrap(home - away)) < 1.1 ? home : wrap(away + wrap(G.wind.from + Math.PI - away) * 0.3);
+      const away = headingTo(p.x - danger.x, p.z - danger.z);
+      // the nearest harbour that does not lie behind the hunter; its fort makes him break off
+      const hp = nearestPort(p.x, p.z, P => Math.abs(wrap(headingTo(P.x - p.x, P.z - p.z) - away)) < 1.6) || nearestPort(p.x, p.z);
+      if (Math.hypot(p.x - hp.x, p.z - hp.z) < 60) { G.dock(); return; }
+      const home = headingTo(hp.x - p.x, hp.z - p.z);
+      const want = Math.abs(wrap(home - away)) < (trader ? 1.6 : 1.1) ? home : wrap(away + wrap(G.wind.from + Math.PI - away) * 0.3);
       p.sailSet = 1; p.shot = 'chain';
       steerTo(p, avoid(p, sailable(p, want)));
       for (const side of [-1, 1]) if (p.reload[side] <= 0 && inArc(p, danger, side) && dd < SHOTS[p.shot].range) fire(p, side, danger);
       return;
     }
     const warships = G.ships.some(o => o.alive && (o.role === 'navy' || o.role === 'pirate') && o.state === 'engage' && o.target === p && Math.hypot(o.x - p.x, o.z - p.z) < 260);
-    const needPort = p.hull < p.maxHull * (warships ? 0.6 : 0.45) || holdRoom() < 8 || p.crew < p.maxCrew * 0.35 || A.toPort;
-    if (G.order === 'port' || needPort) {
-      A.msg = needPort && G.order !== 'port' ? 'Heading to port to ' + (A.toPort ? 'sell the prize cargo' : p.hull < p.maxHull * 0.4 ? 'repair' : holdRoom() < 8 ? 'sell the cargo' : 'hire crew') : 'Sailing to ' + PORT.name;
-      A.phase = 'port';
-      if (G.nearPort(p) && Math.hypot(p.x - PORT.x, p.z - PORT.z) < 60) { G.dock(); return; }
-      if (!p.path || A.pathFor !== 'port') { G.setCourse(p, PORT.x + 10, PORT.z + 6); A.pathFor = 'port'; }
+    const trading = G.order === 'trade' && !G.attract;
+    const needPort = p.hull < p.maxHull * (warships ? 0.6 : 0.45) || (!trading && holdRoom() < 8) || p.crew < p.maxCrew * 0.35 || A.toPort;
+    const sailFor = (P, key) => {
+      if (G.nearPort(p) && Math.hypot(p.x - P.x, p.z - P.z) < 60) { G.dock(); return; }
+      if (!p.path || A.pathFor !== key + P.id) { G.setCourse(p, P.x + 10, P.z + 6); A.pathFor = key + P.id; }
       p.sailSet = 1; followPath(p, 25);
+    };
+    if (G.order === 'port' || needPort) {
+      const P = G.order === 'port' && !needPort ? PORT_BY_ID[A.portGoal] || nearestPort(p.x, p.z) : nearestPort(p.x, p.z);
+      A.msg = needPort && G.order !== 'port' ? 'Heading to ' + P.name + ' to ' + (A.toPort ? 'sell the prize cargo' : p.hull < p.maxHull * 0.4 ? 'repair' : holdRoom() < 8 ? 'sell the cargo' : 'hire crew') : 'Sailing to ' + P.name;
+      A.phase = 'port';
+      sailFor(P, 'port:');
+      return;
+    }
+    if (trading) {
+      if (!A.trade) A.trade = planAtSea(p);
+      const T = A.trade, P = PORT_BY_ID[T.dest];
+      A.phase = 'trade'; G.selected = null;
+      A.msg = T.good ? 'Trade run: ' + T.qty + ' ' + goodName(T.good) + ' for ' + P.name : holdUsed() ? 'Trade run: taking the cargo to ' + P.name : 'Trade run: sailing to ' + P.name + (T.next ? ' for ' + goodName(T.next) : '');
+      sailFor(P, 'trade:');
       return;
     }
     A.pathFor = null;
@@ -762,6 +910,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (G.paused || G.loot && !G.autopilot) return;
     G.t += dt; G.phase = (G.phase + dt * G.daySpeed) % 1;
     stepWind(dt);
+    stepMarkets(dt);
     const P = G.player;
     for (const s of G.ships) { s.think -= dt; if (s.role !== 'player' && s.think <= 0 && s.state !== 'boarding' && s.state !== 'sinking') { s.think = 0.35; npcThink(s); } }
     if (G.autopilot && P.state !== 'sinking') { G.aiThink = (G.aiThink || 0) - dt; if (G.aiThink <= 0 || G.docking) { G.aiThink = 0.3; captain(dt * 0 + 0.3); } }
@@ -778,13 +927,14 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       G.sinking = null;
       const half = Math.floor(G.gold / 2); G.gold -= half;
       for (const g of GOODS) G.cargo[g.id] = 0;
+      G.dockPort = nearestPort(P.x, P.z);
       const m = G.moor({ T: TYPES.sloop });
       const n = spawn({ cls: 'sloop', nation: 'pirate', role: 'player', name: 'Second Chance', x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
       n.crew = Math.round(n.maxCrew * 0.7);
       if (P.alive) remove(P);
       G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 };
-      n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = { screen: 'menu', t: G.t, prices: portPrices(), rumourSeed: Math.floor(rnd() * 2 ** 32) };
-      say('You wash up in ' + PORT.name + ' with half your gold (' + half + ' lost) and a free sloop.', 'bad');
+      n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = openPort(G.dockPort);
+      say('You wash up in ' + G.dockPort.name + ' with half your gold (' + half + ' lost) and a free sloop.', 'bad');
       flash('Shipwrecked', 'Half your gold is gone. The governor lends you a sloop.', 6);
       emit('flagship', n); emit('dock', n);
     }
@@ -798,7 +948,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     G.spawnT = 5;
     const merchants = G.ships.filter(s => s.role === 'merchant' && s.alive && !s.looted && s.state !== 'sinking').length;
     if (merchants < 2) spawnTraffic('merchant');
-    for (const s of [...G.ships]) if (s.role !== 'player' && Math.hypot(s.x, s.z + 40) > 820 && Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420) remove(s);
+    for (const s of [...G.ships]) if (s.role !== 'player' && Math.hypot(s.x, s.z + 40) > 1150 && Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420) remove(s);
   }
   G.setupAttract = () => {
     G.phase = 0.5; G.windBase = -Math.PI / 2; G.wind.from = -Math.PI / 2; // a southerly: the chase is a reach, the run home to port is downwind
@@ -808,7 +958,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const g = spawn({ id: 'galleon', cls: 'galleon', nation: 'spanish', role: 'merchant', name: 'Santa Rosa', x: -60, z: 335, psi: 0.05, v: 4, seed: 9, gold: 820, cargo: { silver: 18, sugar: 30 }, morale: 0.7, crewFrac: 0.8 });
     g.dest = [760, 300]; g.path = route(g.x, g.z, 760, 300); g.wp = 0;
     const e = spawn({ id: 'escort', cls: 'sloop', nation: 'english', role: 'merchant', name: 'Lark', x: -150, z: -40, psi: 0.1, v: 3, seed: 5, gold: 180, cargo: { rum: 14 } });
-    e.dest = [PORT.x, PORT.z]; e.path = route(e.x, e.z, PORT.x, PORT.z); e.wp = 0;
+    const home = PORTS[0]; e.dest = [home.x, home.z]; e.path = route(e.x, e.z, home.x, home.z); e.wp = 0;
     const f = spawn({ id: 'fluyt', cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Gouden Leeuw', x: 420, z: -330, psi: 2.4, v: 3, gold: 420, cargo: { cloth: 24, spices: 10 } });
     f.dest = [-760, 260]; f.path = route(f.x, f.z, -760, 260); f.wp = 0;
     G.ai.target = null; G.autopilot = true; G.attract = true; G.order = 'hunt';
@@ -818,7 +968,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     G.phase = 0.3;
     const p = spawn({ id: 'player', cls: 'sloop', nation: 'pirate', role: 'player', name: 'Black Tide', x: 40, z: 60, psi: 1.2, v: 3, seed: 3 });
     G.player = p; G.autopilot = false; G.attract = false;
-    for (let i = 0; i < 3; i++) spawnTraffic('merchant');
+    for (let i = 0; i < 5; i++) spawnTraffic('merchant');
     G.placeAll();
   };
   G.takeHelm = () => {
@@ -830,8 +980,11 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     G.ai.target = null;
   };
   G.handHelm = (order) => {
-    G.order = order; G.autopilot = true; G.ai.phase = 'look'; G.ai.t = -99; G.ai.pathFor = null; G.player.path = null;
-    say(order === 'hunt' ? 'AI captain: hunting nearby prizes.' : 'AI captain: sailing to ' + PORT.name + '.', 'info');
+    const p = G.player, A = G.ai;
+    G.order = order; G.autopilot = true; A.phase = 'look'; A.t = -99; A.pathFor = null; p.path = null;
+    A.trade = null; A.sold = false; A.portT = 0;
+    if (order === 'port') A.portGoal = nearestPort(p.x, p.z).id;
+    say(order === 'hunt' ? 'AI captain: hunting nearby prizes.' : order === 'trade' ? 'AI captain: on a trade run. Buy cheap, sell dear.' : 'AI captain: sailing to ' + PORT_BY_ID[A.portGoal].name + '.', 'info');
   };
   return G;
 }

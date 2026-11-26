@@ -8,7 +8,8 @@ import { Post } from './post.js';
 import { makeDetail, enhance } from './detail.js';
 import { makeCamp, makeQuayLife } from './props.js';
 import { lookAt, RESOLVED, PHASES } from './looks.js';
-import { createGame, PORT } from './game.js';
+import { createGame } from './game.js';
+import { PORTS, PORT_BY_ID } from './ports.js';
 import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { mulberry32 } from './util.js';
@@ -53,11 +54,11 @@ U.sailMat = U.enhance(new THREE.MeshStandardMaterial({ vertexColors: true, flatS
 // ---------- scene ----------
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xffffff, 0.001);
-U.uHeight.value = bakeHeight(512);
+U.uHeight.value = bakeHeight();
 const sky = makeSky(U); scene.add(sky);
 const clouds = makeClouds(); scene.add(clouds);
 const ocean = makeOcean(U); scene.add(ocean);
-const world = makeWorld(U); scene.add(world.group);
+const world = makeWorld(U, PORTS); scene.add(world.group);
 for (const f of world.flags) { const m = makeFlag(f.kind, f.w, f.h, U); m.position.copy(f.pos); m.rotation.y = 0.8; scene.add(m); }
 const fx = makeFx(U); scene.add(fx.group);
 
@@ -70,16 +71,16 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.3);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
 scene.add(sun, sun.target, fill, fill.target, hemi);
 
-// ---------- lights: fixed world lights plus pools, so the light count never changes ----------
-const reg = [];
-for (const spec of world.lights) {
-  const l = new THREE.PointLight(spec.color, 0, 80, 2); l.position.copy(spec.pos); scene.add(l);
-  reg.push({ l, color: spec.color, power: spec.power, kind: spec.kind });
-}
+// ---------- lights: fixed pools, so the light count never changes however many towns there are ----------
+// Every lamp, brazier and beacon in the world is a spec; each frame the eight that matter most near the
+// focus get a real PointLight. Port Rosalind has seven, so at home every one of them is lit as before.
+const reg = world.lights.map(spec => ({ pos: spec.pos.clone(), color: spec.color, power: spec.power, kind: spec.kind, k: 0 }));
+const worldPool = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffffff, 0, 80, 2); scene.add(l); return l; });
 const torchFires = world.torches.map((p, i) => fx.addFire(scene, p, 0.17, 3 + i));
+world.unlitTorches.forEach((p, i) => torchFires.push(fx.addFire(scene, p, 0.17, 20 + i, false)));
 const camp = makeCamp(U, fx, 151, 56); scene.add(camp.group); torchFires.push(camp.fire);
-for (const spec of camp.lights) { const l = new THREE.PointLight(spec.color, 0, 50, 2); l.position.copy(spec.pos); scene.add(l); reg.push({ l, color: spec.color, power: spec.power, kind: spec.kind }); }
-scene.add(makeQuayLife(U, world.dock));
+const campLights = camp.lights.map(spec => { const l = new THREE.PointLight(spec.color, 0, 50, 2); l.position.copy(spec.pos); scene.add(l); return { l, color: spec.color, power: spec.power, kind: spec.kind }; });
+for (const P of PORTS) scene.add(makeQuayLife(U, world.docks[P.id], P.seed ?? 0));
 const lanternPool = Array.from({ length: 5 }, () => { const l = new THREE.PointLight(0xffb253, 0, 70, 2); scene.add(l); return l; });
 const firePool = Array.from({ length: 3 }, () => { const l = new THREE.PointLight(0xff8a38, 0, 60, 2); scene.add(l); return l; });
 const lanternCol = new Col('#ffb253'), fireCol = new Col('#ff8a38');
@@ -103,6 +104,8 @@ function placeOrtho(target, az, el, vh) {
   ortho.near = view.dist - 300; ortho.far = view.dist + 900;
   ortho.updateProjectionMatrix(); ortho.updateMatrixWorld();
 }
+// the harbour camera looks at the quay you are moored at (for Port Rosalind: -44, -80)
+const portView = () => { const P = (G.port && PORT_BY_ID[G.port.id]) || PORTS[0]; return { x: P.x - 4, z: P.moorZ - 16.8 }; };
 const angLerp = (a, b, k) => a + (((b - a + 540) % 360) - 180) * k;
 const _eye = new V3(), _fwd = new V3(), _up = new V3(), _tmp = new V3(), _tmp2 = new V3();
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -110,8 +113,8 @@ function updateCamera(dt) {
   const p = G.player;
   if (view.iso) { placeOrtho(view.iso.target, view.iso.az, view.iso.el, view.iso.vh); return ortho; }
   if (view.mode === 'port') {
-    const s = Math.sin(G.t * 0.05) * 3;
-    placeOrtho(_tmp.set(-44 + s, 4, -80), 58 + s, 36, 74); return ortho;
+    const s = Math.sin(G.t * 0.05) * 3, hp = portView();
+    placeOrtho(_tmp.set(hp.x + s, 4, hp.z), 58 + s, 36, 74); return ortho;
   }
   if (view.mode === 'deck' && p) {
     const T = p.T, wheelX = T.qd ? -T.L / 2 + T.qd.u * T.L - 1.6 : -T.L * 0.22;
@@ -148,7 +151,7 @@ view.set = (mode) => {
 view.zoom = (f) => {
   if (view.mode === 'port') return;
   if (view.mode === 'deck') { if (f < 1) return; view.set('chase'); view.vh = 30; view.vhT = 40; return; }
-  view.vhT = Math.min(900, Math.max(26, view.vhT * f)); if (view.vhT < 200) view.pan.multiplyScalar(0.5);
+  view.vhT = Math.min(1400, Math.max(26, view.vhT * f)); // 1400 m tall shows the whole archipelago if (view.vhT < 200) view.pan.multiplyScalar(0.5);
 };
 view.name = () => view.mode === 'deck' ? 'deck' : view.mode === 'port' ? 'port' : view.vhT >= 200 ? 'chart' : 'chase';
 
@@ -188,13 +191,11 @@ function applyLook(t, flash) {
   const warm = new Col(1.0, 0.6, 0.24);
   U.glowMat.color.setRGB(0.05, 0.045, 0.04).lerp(warm.clone().multiplyScalar(3.4 * c.windows), Math.min(1, c.windows));
   const cand = [];
-  reg.forEach((r, i) => {
-    const flick = r.kind === 'fire' ? 0.85 + 0.15 * Math.sin(t * 13 + i) * Math.sin(t * 7.3) : 0.94 + 0.06 * Math.sin(t * 9 + i * 3);
-    const k = r.power * c.lamps * flick;
-    r.l.intensity = k * (r.kind === 'beacon' ? 140 : 50);
-    r.l.getWorldPosition(_w);
-    cand.push({ p: _w.clone(), c: r.color, k });
-  });
+  const lampK = (r, i) => r.power * c.lamps * (r.kind === 'fire' ? 0.85 + 0.15 * Math.sin(t * 13 + i) * Math.sin(t * 7.3) : 0.94 + 0.06 * Math.sin(t * 9 + i * 3));
+  reg.forEach((r, i) => { r.k = lampK(r, i); r.d = r.pos.distanceToSquared(_focus); if (r.d < 9e5) cand.push({ p: r.pos, c: r.color, k: r.k }); });
+  const lit = reg.filter(r => r.d < 9e5).sort((a, b) => a.d / (a.power + 0.01) - b.d / (b.power + 0.01));
+  worldPool.forEach((l, i) => { const r = lit[i]; if (!r) { l.intensity = 0; return; } l.position.copy(r.pos); l.color.copy(r.color); l.intensity = r.k * (r.kind === 'beacon' ? 140 : 50); });
+  campLights.forEach((r, i) => { const k = lampK(r, i); r.l.intensity = k * 50; r.l.getWorldPosition(_w); cand.push({ p: _w.clone(), c: r.color, k }); });
   // ship lanterns: every ship feeds the water and the mist; the nearest five also light the scene
   const ships = G.ships.filter(s => s.alive && s.mesh.group.visible).map(s => { s.mesh.group.localToWorld(_w.copy(s.mesh.sternLight)); return { s, p: _w.clone(), d: _w.distanceToSquared(_focus) }; }).sort((a, b) => a.d - b.d);
   ships.forEach((o, i) => {
@@ -249,7 +250,7 @@ function render(dt) {
   cam = updateCamera(dt);
   if (view.iso) _focus.copy(view.iso.target);
   else if (view.mode === 'deck') _focus.copy(G.player.mesh.group.position).setY(2);
-  else if (view.mode === 'port') _focus.set(-44, 4, -80);
+  else if (view.mode === 'port') { const hp = portView(); _focus.set(hp.x, 4, hp.z); }
   else _focus.copy(view.target);
   if (cur.storm > 0.6 && !capture) {
     if (t > state.nextBolt) { state.lightning = 1; state.nextBolt = t + 5 + boltRnd() * 9; fx.bolt.visible = true; fx.bolt.position.set(_focus.x + (boltRnd() - 0.5) * 260, 0, _focus.z - 120 - boltRnd() * 120); if (audio) audio.thunder(); }
@@ -272,7 +273,7 @@ function render(dt) {
 window.addEventListener('resize', resize);
 resize();
 
-const ctx = { G, view, renderer, get cam() { return cam; }, ortho, persp, scene, fx, PORT, get W() { return W; }, get H() { return H; } };
+const ctx = { G, view, renderer, get cam() { return cam; }, ortho, persp, scene, fx, get W() { return W; }, get H() { return H; } };
 
 if (capture) {
   // look-development stills: a staged fleet, a named look, a fixed iso camera

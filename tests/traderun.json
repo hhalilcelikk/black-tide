@@ -1,0 +1,41 @@
+[
+ {
+  "do": "eval",
+  "js": "window.start = window.__bt.G.gold, window.__bt.G.handHelm('trade'), window.__bt.G.order"
+ },
+ {
+  "do": "until",
+  "js": "window.__bt.G.trades.filter(t => t.profit !== null).length >= 3",
+  "max": 1500,
+  "step": 2
+ },
+ {
+  "do": "eval",
+  "js": "({ gold: window.__bt.G.gold, start: window.start, profit: window.__bt.G.tradeProfit, trades: window.__bt.G.trades, log: window.__bt.G.log.map(l => l.text) })"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.trades.filter(t => t.profit !== null).length >= 3",
+  "msg": "the AI captain completed three trade legs on its own"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.trades.filter(t => t.profit > 0).length >= 3",
+  "msg": "at least three legs sold at a profit"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.tradeProfit > 300 && window.__bt.G.gold > window.start + 300",
+  "msg": "the trade run made money: more than 300 profit, and gold is up by more than 300"
+ },
+ {
+  "do": "expect",
+  "js": "new Set(window.__bt.G.trades.map(t => t.port)).size >= 2",
+  "msg": "it traded between at least two ports"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.order === 'trade' && window.__bt.G.autopilot",
+  "msg": "still on the trade run"
+ }
+]

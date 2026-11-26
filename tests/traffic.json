@@ -1,0 +1,64 @@
+[
+ {
+  "do": "advance",
+  "sec": 240,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "window.SNAP = Object.fromEntries(window.__bt.G.ships.map(s => [s.id, [s.x, s.z]])), window.__bt.G.ships.length"
+ },
+ {
+  "do": "advance",
+  "sec": 60,
+  "ships": true
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.ships.filter(s => s.role === 'merchant').length >= 4",
+  "msg": "at least four merchants at sea after five minutes"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.ships.filter(s => s.role === 'merchant').every(s => s.destPort && window.__bt.G.ports.some(P => P.id === s.destPort && P.nation !== 'pirate'))",
+  "msg": "every merchant is bound for a trading port"
+ },
+ {
+  "do": "expect",
+  "js": "new Set(window.__bt.G.ships.filter(s => s.role === 'merchant').map(s => s.destPort)).size >= 2",
+  "msg": "merchants are bound for at least two different ports"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.arrivals.length >= 1",
+  "msg": "at least one merchant reached its port within five minutes"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.ships.filter(s => s.role !== 'player' && window.SNAP[s.id] && !s.arrived && s.state === 'sail' && Math.hypot(s.x - window.SNAP[s.id][0], s.z - window.SNAP[s.id][1]) < 30).map(s => s.name + '@' + Math.round(s.x) + ',' + Math.round(s.z))",
+  "equals": [],
+  "msg": "no ship under sail is stuck (each moved 30 m or more in the last minute)"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.G.ships.some(s => s.role === 'navy') && window.__bt.G.ships.some(s => s.role === 'pirate')",
+  "msg": "navies and pirates are out on the lanes too"
+ },
+ {
+  "do": "eval",
+  "js": "window.__bt.G.arrivals"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const v = window.__bt.view, p = window.__bt.G.player; v.set('chart'); v.vh = v.vhT = 1400; v.pan.set(-p.x, 0, -40 - p.z); return true; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 2,
+  "print": false
+ },
+ {
+  "do": "shot",
+  "out": "shots/chart-archipelago.png"
+ }
+]
