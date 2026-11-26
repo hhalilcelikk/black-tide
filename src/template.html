@@ -70,6 +70,9 @@ kbd{font:inherit;color:var(--amber)}
 .orders{display:grid;gap:calc(var(--px)*2);margin:calc(var(--px)*3) 0}
 .orders button{text-align:left}
 .ship{left:calc(var(--px)*6);bottom:calc(var(--px)*6);width:calc(var(--px)*140)}
+.fleet{left:calc(var(--px)*6);bottom:calc(var(--px)*130);width:calc(var(--px)*140);padding-top:calc(var(--px)*3);padding-bottom:calc(var(--px)*3)}
+.frow{display:grid;grid-template-columns:1fr calc(var(--px)*36) calc(var(--px)*16);gap:calc(var(--px)*3);align-items:center;margin-top:calc(var(--px)*3);white-space:nowrap}
+.frow .bar>i{background:#d98a4a}.frow .fname{overflow:hidden;text-overflow:ellipsis}.frow b{text-align:right}.fitsel{display:flex;gap:calc(var(--px)*2);flex-wrap:wrap;margin:calc(var(--px)*4) 0}
 .guns{margin-top:calc(var(--px)*5);gap:calc(var(--px)*5)}
 .gun{flex:1;display:grid;gap:calc(var(--px)*2)}
 .gun .bar>i{background:var(--ember)}
@@ -123,7 +126,7 @@ kbd{font:inherit;color:var(--amber)}
 .mk{position:absolute;width:0;height:0;transform:translate(-50%,-50%)}
 .mk i{position:absolute;left:calc(var(--px)*-4);top:calc(var(--px)*-4);width:calc(var(--px)*8);height:calc(var(--px)*8);clip-path:polygon(50% 0,100% 100%,50% 75%,0 100%)}
 .mk span{position:absolute;left:calc(var(--px)*7);top:calc(var(--px)*-4);white-space:nowrap;text-shadow:var(--px) var(--px) 0 #000;color:var(--tx)}
-.mk.player i{background:var(--amber)} .mk.merchant i{background:#e9dfc8} .mk.navy i{background:var(--cold)} .mk.pirate i{background:var(--ember)} .mk.struck i{background:#8a8170}
+.mk.player i{background:var(--amber)} .mk.consort i{background:#f3c56b} .mk.merchant i{background:#e9dfc8} .mk.navy i{background:var(--cold)} .mk.pirate i{background:var(--ember)} .mk.struck i{background:#8a8170}
 .sel-ring{position:absolute;border:var(--px) solid var(--amber);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
 /* port screen */
 .port{position:absolute;inset:0;pointer-events:none}
@@ -194,6 +197,7 @@ kbd{font:inherit;color:var(--amber)}
     <button id="helmBtn" class="btn go">Take the helm</button>
   </div>
 
+  <div class="plate fleet" id="fleetPanel" hidden aria-label="Fleet"><div class="dim">Consorts</div><div id="fleetRows"></div></div>
   <div class="plate ship" id="shipPanel">
     <div class="row" style="white-space:nowrap"><i class="flag jolly" id="shipFlag"></i><b id="shipName" class="amber">Black Tide</b><span class="dim" id="shipCls">Brigantine</span></div>
     <div class="dim" id="shipRank" style="margin-top:calc(var(--px)*2)" hidden></div>
@@ -249,6 +253,7 @@ kbd{font:inherit;color:var(--amber)}
     <div class="acts">
       <button class="btn go" data-loot="cargo">Take the cargo</button>
       <button class="btn" data-loot="ship" id="lootShipBtn">Take her as your flagship</button>
+      <button class="btn" data-loot="consort" id="lootConsortBtn">Keep her as a consort</button>
       <button class="btn" data-loot="free">Let her go</button>
     </div>
   </div>

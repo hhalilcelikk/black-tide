@@ -40,7 +40,7 @@ export function createHud(ctx, audio) {
   const { G, view } = ctx;
   for (const el of document.querySelectorAll('.ico[data-i]')) el.innerHTML = svg(el.dataset.i);
   const el = {};
-  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'shipFlag', 'shipRank', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'continueBtn', 'savesBtn', 'saves', 'saveList', 'savesClose', 'importFile', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
+  for (const id of ['gold', 'hold', 'rank', 'rankT', 'portName', 'portSub', 'shipFlag', 'shipRank', 'tod', 'todIco', 'where', 'dayBar', 'banner', 'bannerT', 'bannerS', 'log', 'capTitle', 'capLine', 'orders', 'helmBtn', 'shipName', 'shipCls', 'hullBar', 'hullN', 'sailBar', 'sailN', 'crewBar', 'crewN', 'gunP', 'gunS', 'speed', 'sailSet', 'pos', 'wind', 'caption', 'attract', 'paused', 'target', 'tFlag', 'tName', 'tCls', 'tHull', 'tHullN', 'tSails', 'tSailsN', 'tCrew', 'tCrewN', 'tRange', 'tState', 'oddsN', 'oddsBar', 'boardBtn', 'views', 'skymenu', 'skyBtn', 'soundBtn', 'pauseBtn', 'helpBtn', 'help', 'helpClose', 'lootConsortBtn', 'fleetPanel', 'fleetRows', 'continueBtn', 'savesBtn', 'saves', 'saveList', 'savesClose', 'importFile', 'loot', 'lootShip', 'lootGrid', 'lootShipBtn', 'port', 'portBody', 'marks', 'rose', 'flashScreen', 'shipPanel', 'helm', 'captain', 'purse', 'topc']) el[id] = $(id);
   const txt = (e, s) => { if (e.textContent !== s) e.textContent = s; };
   const pct = (e, k) => { const v = (Math.max(0, Math.min(1, k)) * 100).toFixed(1) + '%'; if (e.style.width !== v) e.style.width = v; };
 
@@ -71,7 +71,7 @@ export function createHud(ctx, audio) {
     if (k === 'escape') { closeModals(); G.selected = null; return; }
     if (k === '?' || k === 'f1') { el.help.hidden = !el.help.hidden; e.preventDefault(); return; }
     if (!el.help.hidden) { if (k === 'enter' || k === ' ') { el.help.hidden = true; e.preventDefault(); } return; }
-    if (G.loot && !G.autopilot) { if (k === '1' || k === 'enter') G.takeLoot('cargo'); else if (k === '2') G.takeLoot('ship'); else if (k === '3') G.takeLoot('free'); return; }
+    if (G.loot && !G.autopilot) { if (k === '1' || k === 'enter') G.takeLoot('cargo'); else if (k === '2') G.takeLoot('ship'); else if (k === '3') G.takeLoot('free'); else if (k === '4') G.takeLoot('consort'); return; }
     if (G.attract && !['shift', 'tab', 'm', 'l', '1', '2', '3', '?'].includes(k)) { take(); if (!'wasdqe '.includes(k)) return; }
     if (e.repeat && !'ad'.includes(k) && !['arrowleft', 'arrowright'].includes(k)) return;
     switch (k) {
@@ -319,15 +319,15 @@ export function createHud(ctx, audio) {
     const PD = PORT_BY_ID[G.port ? G.port.id : 'rosalind'];
     txt(el.portName, PD.name); txt(el.portSub, PD.blurb + ' · ' + PD.governor);
     const head = (h, lede) => `<h2 class="fell">${h}</h2><p class="lede">${lede}</p>`;
-    const purse = `<div class="summary"><span class="stat"><i class="ico">${svg('coin')}</i>${fmt(G.gold)} gold</span><span class="stat"><i class="ico">${svg('crate')}</i>${G.holdUsed()}/${p.C.hold} in the hold</span></div>`;
+    const purse = `<div class="summary"><span class="stat"><i class="ico">${svg('coin')}</i>${fmt(G.gold)} gold</span><span class="stat"><i class="ico">${svg('crate')}</i>${G.holdUsed()}/${G.holdCap()} in the hold</span></div>`;
     let h = '';
     if (s === 'menu') {
       const rc = G.repairCost();
       h = head('The harbour', PD.harbour) + purse +
         `<div class="cards">
           <div class="card"><b class="fell">Sell the whole hold</b><span class="dim">At this port's prices</span><button data-act="sellall" ${G.holdUsed() ? '' : 'disabled'}>Sell all</button></div>
-          <div class="card"><b class="fell">Repair the ${p.name}</b><span class="dim">${rc ? rc + ' gold for hull and sails' : 'She is sound'}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>Repair</button></div>
-          <div class="card"><b class="fell">Hire to full crew</b><span class="dim">${p.maxCrew - Math.round(p.crew)} berths · 6 gold a head</span><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire</button></div>
+          <div class="card"><b class="fell">Repair the ${G.consorts().length ? 'fleet' : p.name}</b><span class="dim">${rc ? rc + ' gold for hull and sails' : G.consorts().length ? 'All three are sound' : 'She is sound'}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>Repair</button></div>
+          <div class="card"><b class="fell">Hire to full crew</b><span class="dim">${G.fleet().reduce((a, s) => a + s.maxCrew - Math.round(s.crew), 0)} berths · 6 gold a head</span><button data-act="hirefull" ${G.fleet().some(s => s.crew < s.maxCrew) && G.gold >= 6 ? '' : 'disabled'}>Hire</button></div>
           <div class="card"><b class="fell">Captain's log</b><span class="dim">${G.slot ? 'Saved to slot ' + G.slot + ' at every port' : 'Saved at every port once you have the helm'}</span><button data-act="export">Export career</button><button data-act="import">Import career</button></div>
         </div>`;
     } else if (s === 'market') {
@@ -339,11 +339,12 @@ export function createHud(ctx, audio) {
         `<table class="tbl"><tr><th>Goods</th><th>Hold</th><th>Sell</th><th>Buy</th><th></th></tr>` +
         GOODS.map(g => `<tr><td>${g.name}${tag(g.id)}</td><td>${G.cargo[g.id]}</td><td class="ok">${P[g.id].sell}</td><td class="amber">${P[g.id].buy}</td><td><button data-trade="${g.id}:-10" aria-label="Sell 10 ${g.name}" ${G.cargo[g.id] ? '' : 'disabled'}>−10</button> <button data-trade="${g.id}:10" aria-label="Buy 10 ${g.name}" ${G.gold >= P[g.id].buy && G.holdRoom() > 0 ? '' : 'disabled'}>+10</button></td></tr>`).join('') + `</table>`;
     } else if (s === 'shipwright') {
-      const rc = G.repairCost();
-      const up = (k, label, what) => { const c = G.upgradeCost(k); return `<div class="card"><b class="fell">${label} ${'+'.repeat(G.upgrades[k])}</b><span class="dim">${what}</span><button data-up="${k}" ${c !== null && G.gold >= c ? '' : 'disabled'}>${c === null ? 'Fully fitted' : c + ' gold'}</button></div>`; };
+      const rc = G.repairCost(), F = G.fleet(), sel = F[Math.min(G.port.fit || 0, F.length - 1)];
+      const pickShip = F.length > 1 ? `<div class="fitsel">${F.map((s, i) => `<button data-fit="${i}" aria-pressed="${s === sel}">${s.name}</button>`).join('')}</div>` : '';
+      const up = (k, label, what) => { const c = G.upgradeCost(k, sel); return `<div class="card"><b class="fell">${label} ${'+'.repeat(sel.up[k])}</b><span class="dim">${what}</span><button data-up="${k}" data-ship="${F.indexOf(sel)}" ${c !== null && G.gold >= c ? '' : 'disabled'}>${c === null ? 'Fully fitted' : c + ' gold'}</button></div>`; };
       const tradeIn = Math.round(CLASSES[p.cls].price * 0.5 * (p.hull / p.maxHull));
       h = head('Shipwright', 'Mistress Penhallow runs the slip. She judges a ship by the sound its planks make.') + purse +
-        `<div class="cards"><div class="card"><b class="fell">Repairs</b><span class="dim">Hull ${Math.round(p.hull)}/${p.maxHull} · Sails ${Math.round(p.sails)}/${p.maxSails}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>${rc ? 'Repair · ' + rc + ' gold' : 'Nothing to mend'}</button></div>` +
+        pickShip + `<div class="cards"><div class="card"><b class="fell">Repairs${F.length > 1 ? ' · whole fleet' : ''}</b><span class="dim">${sel.name}: hull ${Math.round(sel.hull)}/${sel.maxHull} · sails ${Math.round(sel.sails)}/${sel.maxSails}</span><button data-act="repair" ${rc && G.gold >= rc ? '' : 'disabled'}>${rc ? 'Repair · ' + rc + ' gold' : 'Nothing to mend'}</button></div>` +
         up('hull', 'Oak doubling', '+10% hull') + up('sails', 'New canvas', '+6% speed') + up('guns', 'Drilled gun crews', '−10% reload') + `</div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Ships for sale</h2><p class="lede">Trade-in for your ${CLASSES[p.cls].name.toLowerCase()}: ${tradeIn} gold.</p><div class="cards">` +
         ['sloop', 'schooner', 'brigantine', 'frigate'].map(k => { const C = CLASSES[k]; const own = k === p.cls; return `<div class="card"><b class="fell">${C.name}</b><span class="dim">${C.role}</span><div class="kv"><span>Guns</span><b>${C.guns}</b><span>Crew</span><b>${C.crew}</b><span>Hold</span><b>${C.hold}</b><span>Speed</span><b>${C.knots} kn</b></div><button data-buy="${k}" ${!own && G.gold + tradeIn >= C.price ? '' : 'disabled'}>${own ? 'Your ship' : fmt(C.price) + ' gold'}</button></div>`; }).join('') + `</div>`;
@@ -391,9 +392,10 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Bounties</h2><p class="rumour">500 gold: the pirate sloop Merry Widow, last seen off Gull Cay.</p><p class="rumour">250 gold: news of the Spanish galleon San Telmo's route.</p>`;
     }
     body.innerHTML = h;
-    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.player.maxCrew - Math.round(G.player.crew)); if (a === 'marque') G.acceptMarque(); if (a === 'resign') G.resignMarque(); if (a === 'brethren') G.joinBrethren(); if (a === 'export') G.say('Exported the career to ' + exportCareer(G) + '.'); if (a === 'import') { el.importFile.click(); return; } renderPort(); });
+    for (const b of body.querySelectorAll('[data-act]')) b.addEventListener('click', () => { const a = b.dataset.act; if (a === 'sellall') { const s2 = G.sellAll(); if (s2) G.flash('+' + s2 + ' gold', 'Sold the hold'); } if (a === 'repair') G.repair(); if (a === 'hire10') G.hire(10); if (a === 'hirefull') G.hire(G.fleet().reduce((t, s) => t + s.maxCrew - Math.round(s.crew), 0)); if (a === 'marque') G.acceptMarque(); if (a === 'resign') G.resignMarque(); if (a === 'brethren') G.joinBrethren(); if (a === 'export') G.say('Exported the career to ' + exportCareer(G) + '.'); if (a === 'import') { el.importFile.click(); return; } renderPort(); });
     for (const b of body.querySelectorAll('[data-trade]')) b.addEventListener('click', () => { const [id, n] = b.dataset.trade.split(':'); G.trade(id, +n); renderPort(); });
-    for (const b of body.querySelectorAll('[data-up]')) b.addEventListener('click', () => { G.upgrade(b.dataset.up); renderPort(); });
+    for (const b of body.querySelectorAll('[data-up]')) b.addEventListener('click', () => { G.upgrade(b.dataset.up, G.fleet()[+b.dataset.ship || 0]); renderPort(); });
+    for (const b of body.querySelectorAll('[data-fit]')) b.addEventListener('click', () => { G.port.fit = +b.dataset.fit; renderPort(); });
     for (const b of body.querySelectorAll('[data-buy]')) b.addEventListener('click', () => { G.buyShip(b.dataset.buy); renderPort(); });
   }
   G.on('dock', () => { el.port.hidden = false; G.port.screen = 'menu'; renderPort(); });
@@ -406,7 +408,7 @@ export function createHud(ctx, audio) {
     tick += dt;
     const p = G.player, A = G.autopilot;
     // purse
-    txt(el.gold, fmt(G.gold)); txt(el.hold, G.holdUsed() + '/' + p.C.hold); txt(el.rank, G.rank === null ? 'Unranked' : '#' + G.rank); txt(el.rankT, G.rank === null ? '' : G.title());
+    txt(el.gold, fmt(G.gold)); txt(el.hold, G.holdUsed() + '/' + G.holdCap()); txt(el.rank, G.rank === null ? 'Unranked' : '#' + G.rank); txt(el.rankT, G.rank === null ? '' : G.title());
     // time
     const pn = phaseName(G.phase), wx = G.weather > 0.7 ? 'Storm' : G.weather > 0.3 ? 'Squall' : 'Clear';
     txt(el.tod, pn + ' · ' + wx);
@@ -430,6 +432,9 @@ export function createHud(ctx, audio) {
     txt(el.capLine, A ? (G.docked ? 'Selling and refitting in port' : G.docking ? 'Coming alongside the quay' : G.ai.msg) : G.course ? 'Course set · any WASD key takes it back' : 'WASD to sail · Q/E to fire · H for orders');
     el.capLine.className = A ? 'amber' : 'dim';
     // ship
+    const cons = G.consorts();
+    el.fleetPanel.hidden = !cons.length || G.docked;
+    if (cons.length) { const fh = cons.map(s => `<div class="frow" title="${s.name}, ${CLASSES[s.cls].name.toLowerCase()}"><span class="fname">${s.name}</span><div class="bar"><i style="width:calc(${Math.max(0, s.hull / s.maxHull) * 100}% - var(--px)*2)"></i></div><b>${Math.round(s.crew)}</b></div>`).join(''); if (el.fleetRows._h !== fh) { el.fleetRows.innerHTML = fh; el.fleetRows._h = fh; } }
     txt(el.shipName, p.name); txt(el.shipCls, CLASSES[p.cls].name);
     const rk = G.commission ? RANKS[G.commission.rank].name + ' of ' + NATIONS[G.commission.nation].name : G.brethren ? 'Brother of the Coast' : '';
     txt(el.shipRank, rk); el.shipRank.hidden = !rk;
@@ -475,6 +480,8 @@ export function createHud(ctx, audio) {
       el.lootGrid.innerHTML = `<span>Gold</span><b class="amber">+${fmt(Lt.gold)}</b>` + Lt.goods.map(([id, n]) => `<span>${GOODS.find(g => g.id === id).name}</span><b>${n}</b>`).join('') + `<span>Men lost</span><b class="ember">${Lt.lost}</b>`;
       el.lootShipBtn.disabled = CLASSES[b.cls].guns < G.player.C.guns * 0.8;
       el.lootShipBtn.textContent = el.lootShipBtn.disabled ? 'Too small to take as flagship' : 'Take her as your flagship';
+      el.lootConsortBtn.disabled = G.consorts().length >= 2;
+      el.lootConsortBtn.textContent = el.lootConsortBtn.disabled ? 'Your fleet is full (3 ships)' : 'Keep her as a consort';
       for (const bt of el.loot.querySelectorAll('button')) bt.tabIndex = showLoot ? 0 : -1;
     }
     for (const bt of el.loot.querySelectorAll('button')) bt.style.pointerEvents = showLoot ? 'auto' : 'none';

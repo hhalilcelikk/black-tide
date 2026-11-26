@@ -1,0 +1,212 @@
+[
+ {
+  "do": "eval",
+  "js": "window.G = window.__bt.G; window.prize = (nation, cls) => { const p = G.player, s = G.spawn({ cls, nation, role: 'merchant', x: p.x + Math.sin(p.psi) * 16, z: p.z + Math.cos(p.psi) * 16, psi: p.psi, v: p.v, gold: 150, cargo: { rum: 8 } }); s.crew = 1; s.state = 'struck'; s.threat = p; s.threatT = G.t; G.placeAll(); return G.board(p, s); }; G.player.crew = G.player.maxCrew; G.consorts().length"
+ },
+ {
+  "do": "eval",
+  "js": "prize('dutch', 'schooner')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "!document.getElementById('lootConsortBtn').disabled",
+  "msg": "a prize can be kept as a consort"
+ },
+ {
+  "do": "eval",
+  "js": "G.takeLoot('consort'), G.consorts().map(s => s.name)"
+ },
+ {
+  "do": "eval",
+  "js": "prize('english', 'brigantine')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "G.takeLoot('consort'), G.consorts().map(s => s.name + ' ' + s.cls)"
+ },
+ {
+  "do": "expect",
+  "js": "G.consorts().length === 2 && G.consorts().every(s => s.role === 'consort' && s.flagKind === G.colours())",
+  "msg": "two consorts sail under your colours"
+ },
+ {
+  "do": "eval",
+  "js": "prize('french', 'sloop')"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "document.getElementById('lootConsortBtn').disabled && (G.takeLoot('consort'), G.consorts().length === 2) && !G.loot",
+  "msg": "a third consort is refused: three ships is a full fleet"
+ },
+ {
+  "do": "expect",
+  "js": "G.holdCap() === Math.round(G.player.C.hold + G.consorts().reduce((a, s) => a + s.C.hold, 0)) && G.holdCap() > G.player.C.hold * 2",
+  "msg": "the fleet shares one hold, the sum of all three"
+ },
+ {
+  "do": "eval",
+  "js": "G.setCourse(G.player, 260, 300), G.player.sailSet = 1"
+ },
+ {
+  "do": "advance",
+  "sec": 70,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "G.consorts().every(s => Math.hypot(s.x - G.player.x, s.z - G.player.z) < 140 && s.v > 1)",
+  "msg": "after a minute under sail both consorts keep station near the flagship"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const r = [...document.querySelectorAll('#ui .plate')].filter(e => !e.classList.contains('modal') && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden').map(e => [e.id || e.className, e.getBoundingClientRect()]).filter(([, b]) => b.width > 0); const o = []; for (let a = 0; a < r.length; a++) for (let b = a + 1; b < r.length; b++) { const A = r[a][1], B = r[b][1]; if (A.left < B.right - 1 && B.left < A.right - 1 && A.top < B.bottom - 1 && B.top < A.bottom - 1) o.push(r[a][0] + ' / ' + r[b][0]); } return o; })()",
+  "equals": [],
+  "msg": "the fleet panel overlaps no other plate"
+ },
+ {
+  "do": "shot",
+  "out": "shots/fleet-formation.png"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const p = G.player; const e = G.spawn({ cls: 'frigate', nation: 'pirate', role: 'pirate', name: 'Night Heron', x: p.x + Math.cos(p.psi) * 170, z: p.z - Math.sin(p.psi) * 170, psi: p.psi + Math.PI, v: 3 }); e.path = null; window.ENEMY = e.id; for (const s of G.consorts()) s.shotsFired = 0, s.hits = 0; return e.C.guns; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 50,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const e = G.ships.find(s => s.id === ENEMY); return G.consorts().every(s => s.shotsFired > 0) && G.consorts().reduce((a, s) => a + (s.hits || 0), 0) > 0; })()",
+  "msg": "when a pirate frigate attacks, both consorts fire their own broadsides and hit her"
+ },
+ {
+  "do": "eval",
+  "js": "G.consorts().map(s => [s.name, s.state, s.shotsFired, s.hits || 0, Math.round(s.hull)])"
+ },
+ {
+  "do": "shot",
+  "out": "shots/fleet-fight.png"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const e = G.ships.find(s => s.id === ENEMY); if (e) G.remove(e); const p = G.player; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: p.x - Math.sin(p.psi) * 70, z: p.z - Math.cos(p.psi) * 70, psi: p.psi, v: p.v }); m.path = null; G.selected = m; window.TGT = m.id; p.reload['-1'] = 0; p.reload['1'] = 0; return m.name; })()"
+ },
+ {
+  "do": "key",
+  "key": "q"
+ },
+ {
+  "do": "key",
+  "key": "e"
+ },
+ {
+  "do": "advance",
+  "sec": 3,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "G.t - G.fleetFireT < 5 && G.consorts().some(s => s.target && s.target.id === TGT)",
+  "msg": "once the flagship opens fire, the consorts take her target"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const m = G.ships.find(s => s.id === TGT); if (m) G.remove(m); G.selected = null; G.fleetFireT = -1e9; G.handHelm('port'); return G.ai.portGoal; })()"
+ },
+ {
+  "do": "until",
+  "js": "G.docked",
+  "max": 500,
+  "step": 1
+ },
+ {
+  "do": "advance",
+  "sec": 60,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "G.consorts().every(s => s.state === 'docked' && Math.hypot(s.x - G.anchorFor(s).x, s.z - G.anchorFor(s).z) < 15)",
+  "msg": "both consorts follow the flagship into port and anchor off the pier"
+ },
+ {
+  "do": "shot",
+  "out": "shots/fleet-port.png"
+ },
+ {
+  "do": "eval",
+  "js": "G.takeHelm(), G.gold = 5000, document.querySelector('[data-port=shipwright]').click(), document.querySelectorAll('[data-fit]').length"
+ },
+ {
+  "do": "expect",
+  "js": "document.querySelectorAll('[data-fit]').length === 3",
+  "msg": "the shipwright lets you pick any of the three ships"
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-fit=\"2\"]').click(), document.querySelector('[data-up=hull]').click(), G.consorts()[1].up.hull"
+ },
+ {
+  "do": "expect",
+  "js": "G.consorts()[1].up.hull === 1 && G.player.up.hull === 0 && G.consorts()[1].maxHull > G.consorts()[1].C.hull",
+  "msg": "an upgrade goes to the consort you picked"
+ },
+ {
+  "do": "shot",
+  "out": "shots/fleet-shipwright.png"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const d = G.snapshot(); return d.consorts.length === 2 && d.consorts[1].up.hull === 1; })()",
+  "msg": "the fleet is part of the save"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const d = G.snapshot(); G.restore(d, null); return G.consorts().map(s => [s.name, s.state, s.up.hull]); })()"
+ },
+ {
+  "do": "expect",
+  "js": "G.consorts().length === 2 && G.consorts().every(s => s.state === 'docked') && G.consorts()[1].up.hull === 1",
+  "msg": "restoring the save brings both consorts back at anchor"
+ },
+ {
+  "do": "eval",
+  "js": "G.leavePort(), window.HEIR = G.consorts().slice().sort((a, b) => b.C.guns - a.C.guns || b.hull - a.hull)[0].name, HEIR"
+ },
+ {
+  "do": "advance",
+  "sec": 20,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "(() => { G.player.threat = null; G.player.hull = 0; return G.player.name; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 1,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "G.player.name === HEIR && G.player.role === 'player' && !G.sinking && G.consorts().length === 1",
+  "msg": "when the flagship sinks, the biggest consort becomes the flagship"
+ }
+]

@@ -51,7 +51,7 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
 | `src/template.html` | Page shell and the HUD markup and styles |
 | `tools/pixelfont.mjs` | The BT Pixel font: glyph bitmaps and the TrueType builder that `build.mjs` runs |
-| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken); `tests/ports-stills.json` shoots every harbour |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken) and fleet (two consorts in formation, in a fight, in port, at the shipwright, and taking the flag); `tests/ports-stills.json` shoots every harbour |
 
 ## Credits
 

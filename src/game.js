@@ -67,7 +67,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     gold: 350, cargo: Object.fromEntries(GOODS.map(g => [g.id, 0])), fame: 0, prizes: 0, rank: null,
     autopilot: true, order: 'hunt', attract: true, docked: false, port: null,
     boarding: null, loot: null, course: null, sinking: null, standing: { english: 0, spanish: -10, french: 0, dutch: 0, pirate: 0 }, commission: null, brethren: false, stolen: {},
-    upgrades: { hull: 0, sails: 0, guns: 0 }, tutorial: true,
+    tutorial: true, aggroT: -1e9, fleetFireT: -1e9,
     on(ev, f) { (listeners[ev] || (listeners[ev] = [])).push(f); },
   };
   // ---------------- markets ----------------
@@ -87,6 +87,11 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   }
   G.tradeProfit = 0; G.trades = []; G.ports = PORTS; G.arrivals = [];
 
+  Object.defineProperty(G, 'upgrades', { enumerable: true, get() { return G.player ? G.player.up : { hull: 0, sails: 0, guns: 0 }; }, set(v) { if (G.player) G.player.up = v; } });
+  // your fleet: the flagship (role 'player') and up to two consorts
+  const isFleet = s => !!s && (s.role === 'player' || s.role === 'consort');
+  G.isFleet = isFleet;
+  G.consorts = () => G.ships.filter(s => s.role === 'consort' && s.alive && s.state !== 'sinking');
   const say = (text, kind = 'info') => { G.log.unshift({ text, kind, t: G.t }); G.log.length = Math.min(G.log.length, 6); emit('log', { text, kind }); };
   G.say = say;
   const flash = (text, sub, dur = 4) => { G.banner = { text, sub, t: G.t, dur }; };
@@ -104,7 +109,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       x: o.x, z: o.z, psi: o.psi ?? 0, v: o.v ?? 3, rudder: 0, sailSet: o.sailSet ?? 1, sailAmt: o.sailSet ?? 1, heel: 0, y: 0, roll: 0, pitch: 0,
       maxHull: C.hull, maxSails: C.sails, maxCrew: C.crew, hull: C.hull, sails: C.sails, crew: Math.round(C.crew * (o.crewFrac ?? 1)), morale: o.morale ?? 1,
       reload: { '-1': 0, '1': 0 }, shot: 'round', state: 'sail', gold: o.gold ?? 0, cargo: o.cargo || {}, dest: o.dest || null, path: null, wp: 0,
-      think: rnd() * 0.5, target: null, threat: null, threatT: -99, tack: 0, tackT: 0, struckT: 0, fires: [], sinkT: 0, hitT: -9, alive: true, aground: 0,
+      up: { hull: 0, sails: 0, guns: 0 }, think: rnd() * 0.5, target: null, threat: null, threatT: -99, tack: 0, tackT: 0, struckT: 0, fires: [], sinkT: 0, hitT: -9, alive: true, aground: 0,
     };
     G.ships.push(s);
     return s;
@@ -122,8 +127,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.remove = remove;
   const hostile = (a, b) => {
     if (a === b || !b.alive) return false;
-    if (a.role === 'player') return b.role !== 'player';
-    if (b.role === 'player') return a.role === 'navy' ? true : a.role === 'pirate' ? (a.rival ? true : !G.brethren) : (a.threat === b);
+    if (isFleet(a)) return !isFleet(b);
+    if (isFleet(b)) return a.role === 'navy' ? true : a.role === 'pirate' ? (a.rival ? true : !G.brethren) : (a.threat === b);
     if (b.rival && a.role === 'navy' && friendly(a.nation, b.nation)) return false; // a navy lets its own crown's famous captains be
     if (a.role === 'pirate') return b.role !== 'pirate';
     if (b.role === 'pirate') return a.role === 'navy';
@@ -131,7 +136,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   };
   G.hostile = hostile;
   G.speedKn = s => s.v / KN;
-  G.reloadTime = s => 6.2 / Math.min(1, Math.max(0.35, 0.3 + 0.8 * s.crew / s.maxCrew)) * (s.role === 'player' ? 1 / (1 + 0.1 * G.upgrades.guns) : s.role === 'merchant' ? 1.5 : 1);
+  G.reloadTime = s => 6.2 / Math.min(1, Math.max(0.35, 0.3 + 0.8 * s.crew / s.maxCrew)) * (isFleet(s) ? 1 / (1 + 0.1 * s.up.guns) : s.role === 'merchant' ? 1.5 : 1);
 
   // ---------------- wind and weather ----------------
   function stepWind(dt) {
@@ -170,7 +175,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const C = s.C, w = G.wind;
     s.sailAmt += (s.sailSet - s.sailAmt) * (1 - Math.exp(-dt / 2.0));
     const off = Math.abs(wrap(s.psi - w.from));
-    const up = s.role === 'player' ? 1 + 0.06 * G.upgrades.sails : 1;
+    // a consort off her station crowds on sail to catch up (a fleet otherwise sails at its slowest ship's pace)
+    const up = (isFleet(s) ? 1 + 0.06 * s.up.sails : 1) * (s.role === 'consort' && s.lag ? 1.2 : 1) * (s.role === 'player' && G.fleetWait ? 0.8 : 1);
     let target = C.knots * KN * up * polar(off, C) * s.sailAmt * Math.min(1.35, w.speed) * (0.3 + 0.7 * s.sails / s.maxSails);
     if (s.state === 'struck' || s.state === 'sinking' || s.state === 'docked') target = 0;
     if (s.state === 'boarding') target = Math.min(target, 0.6);
@@ -235,7 +241,9 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.sideTo = sideTo;
   function fire(s, side, aimAt) {
     if (s.reload[side] > 0 || s.state === 'struck' || s.state === 'sinking' || s.state === 'docked' || s.state === 'boarding') return false;
-    if (s.role === 'player' && aimAt && !G.legal(aimAt)) s.aggroT = G.t;
+    if (isFleet(s) && aimAt && !G.legal(aimAt)) G.aggroT = G.t;
+    if (s.role === 'player') G.fleetFireT = G.t;
+    s.shotsFired = (s.shotsFired || 0) + 1;
     const shot = SHOTS[s.shot];
     const guns = side > 0 ? s.mesh.guns.star : s.mesh.guns.port;
     let d = 150;
@@ -278,13 +286,14 @@ export function createGame({ scene, U, fx, seed = 7 }) {
 
   function damage(s, shot, by, px, py, pz, part) {
     const w = (GUNW[by.cls] || 1) * (by.role === 'merchant' ? 0.55 : 1), S = SHOTS[shot]; // merchant crews are poor gunners
-    const shield = s.role === 'player' ? 1 / (1 + 0.1 * G.upgrades.hull) : 1;
+    const shield = isFleet(s) ? 1 / (1 + 0.1 * s.up.hull) : 1;
     if (part === 'rig') { s.sails -= shot === 'chain' ? 5.2 * w : S.sails * 2 * w; s.crew -= shot === 'grape' ? S.crew * w : 0; s.hull -= S.hull * w * 0.2; }
     else { s.hull -= S.hull * w * shield; s.sails -= S.sails * w * 0.5; s.crew -= S.crew * w * (0.6 + rnd() * 0.8); }
     s.sails = Math.max(0, s.sails); s.crew = Math.max(0, s.crew);
     s.hitT = G.t;
-    if (s.role !== 'player' && by && (!s.threat || s.threat === by)) { s.threat = by; s.threatT = G.t; }
-    if (s.role !== 'player' && by.role === 'player' && s.nation !== 'pirate') G.standing[s.nation] = (G.standing[s.nation] || 0) - 0.4;
+    if (!isFleet(s) && by && (!s.threat || s.threat === by)) { s.threat = by; s.threatT = G.t; }
+    if (isFleet(by) && !isFleet(s)) by.hits = (by.hits || 0) + 1;
+    if (!isFleet(s) && isFleet(by) && s.nation !== 'pirate') G.standing[s.nation] = (G.standing[s.nation] || 0) - 0.4;
     fx.hit(new THREE.Vector3(px, py, pz), G.t, part === 'rig');
     emit('hit', { s, x: px, z: pz, part, by });
     if (s.hull < s.maxHull * 0.55 && s.fires.length < 2 && rnd() < 0.05 && part !== 'rig') {
@@ -329,20 +338,28 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (s.hull <= 0) {
       s.state = 'sinking'; s.sinkT = 0; s.sailSet = 0;
       emit('sink', s);
-      if (s.role === 'player') { say('The ' + s.name + ' is going down!', 'bad'); G.sinking = { t: G.t }; }
+      if (s.role === 'player') {
+        const heir = G.consorts().sort((a, b) => b.C.guns - a.C.guns || b.hull - a.hull)[0];
+        if (heir) { // the biggest consort takes the flag; no shipwreck while the fleet floats
+          s.role = 'lost'; heir.role = 'player'; heir.state = 'sail'; G.player = heir; G.selected = null; trimHold(s);
+          say('The ' + s.name + ' is going down! The ' + heir.name + ' is your flagship now.', 'bad');
+          flash(s.name + ' is lost', 'The ' + heir.name + ' carries your flag', 5);
+          emit('flagship', heir);
+        } else { say('The ' + s.name + ' is going down!', 'bad'); G.sinking = { t: G.t }; }
+      } else if (s.role === 'consort') { s.role = 'lost'; say('Your consort the ' + s.name + ' is going down!', 'bad'); trimHold(s); emit('consortLost', s); }
       else {
         const by = s.threat;
-        if (by && by.role === 'player') { credit(s, 'sink'); if (s.rival) ladder.beat(s.rival, 'goes down under your guns'); const salvage = Math.round((s.gold || 100) * 0.25); G.gold += salvage; G.fame += 3; say('Sank the ' + s.name + '. Salvage: +' + salvage + ' gold', 'good'); flash(s.name + ' sinks', '+' + salvage + ' gold in salvage'); }
+        if (isFleet(by)) { credit(s, 'sink'); if (s.rival) ladder.beat(s.rival, 'goes down under your guns'); const salvage = Math.round((s.gold || 100) * 0.25); G.gold += salvage; G.fame += 3; say('Sank the ' + s.name + '. Salvage: +' + salvage + ' gold', 'good'); flash(s.name + ' sinks', '+' + salvage + ' gold in salvage'); }
       }
       return;
     }
-    if (s.role === 'player' || s.state === 'struck' || s.state === 'boarding') return;
+    if (isFleet(s) || s.role === 'lost' || s.state === 'struck' || s.state === 'boarding') return;
     const h = s.hull / s.maxHull, c = s.crew / s.maxCrew, sl = s.sails / s.maxSails;
     const lim = s.role === 'merchant' ? [0.55, 0.55, 0.35] : s.role === 'pirate' ? [0.32, 0.32, 0.1] : [0.24, 0.26, 0.08];
     if (G.t - s.threatT < 40 && (h < lim[0] || c < lim[1] || sl < lim[2])) {
       s.state = 'struck'; s.sailSet = 0; s.struckT = G.t; s.mesh.setFlag('white'); s.flagKind = 'white';
-      if (s.threat && s.threat.role === 'player' && s.rival) ladder.beat(s.rival, 'strikes to you');
-      if (s.threat && s.threat.role === 'player') { say('The ' + s.name + ' strikes her colours!', 'good'); flash(s.name + ' strikes her colours', 'Come alongside and press B to board'); }
+      if (isFleet(s.threat) && s.rival) ladder.beat(s.rival, 'strikes to you');
+      if (isFleet(s.threat)) { say('The ' + s.name + ' strikes her colours!', 'good'); flash(s.name + ' strikes her colours', 'Come alongside and press B to board'); }
       emit('struck', s);
     }
   }
@@ -458,7 +475,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (!G.canBoard(a, b)) return false;
     G.boarding = { a, b, t: 0, p: odds(a, b), roll: G.attract && a.role === 'player' && !G.prizes ? 0 : rnd(), side: sideTo(a, b) }; // the trailer's first prize always falls
     a.state = 'boarding'; b.prevState = b.state; b.state = 'boarding'; a.sailSet = 0; a.rudder = 0; b.rudder = 0;
-    if (a.role === 'player' && !G.legal(b)) a.aggroT = G.t;
+    if (a.role === 'player' && !G.legal(b)) G.aggroT = G.t;
     emit('board', G.boarding);
     if (a.role === 'player') say('Grapples away! Boarding the ' + b.name + '.', 'info');
     return true;
@@ -513,6 +530,19 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       for (const [id, n] of L.goods) { const k = Math.min(n, room); G.cargo[id] += k; G.stolen[id] = (G.stolen[id] || 0) + k; room -= k; b.cargo[id] -= k; }
       if (L.gold) flash('+' + L.gold + ' gold', 'Cargo taken from the ' + b.name, 4);
     }
+    if (choice === 'consort' && G.consorts().length < 2) {
+      // a prize crew from the flagship, and a few of her own hands who sign on
+      const P = G.player, k = Math.max(6, Math.round(P.crew * 0.2));
+      P.crew = Math.max(4, P.crew - k);
+      b.role = 'consort'; b.crew = Math.min(b.maxCrew, k + Math.round(b.crew * 0.3)); b.morale = 1; b.state = 'sail'; b.sailSet = 1; b.threat = null; b.target = null; b.path = null; b.looted = false; b.prize = false;
+      b.hull = Math.max(b.hull, b.maxHull * 0.35); b.sails = Math.max(b.sails, b.maxSails * 0.35);
+      applyColours(b);
+      say('The ' + b.name + ' sails with you now: a ' + CLASSES[b.cls].name.toLowerCase() + ' under a prize crew of ' + b.crew + '.', 'good');
+      flash('A new consort', 'The ' + b.name + ' joins your fleet', 4);
+      emit('consort', b);
+      G.loot = null;
+      return;
+    }
     if (choice === 'ship' && CLASSES[b.cls].guns >= G.player.C.guns * 0.8) {
       const old = G.player;
       b.role = 'player'; b.nation = 'pirate'; b.crew = Math.max(12, Math.round(old.crew * 0.85)); b.morale = 1; b.state = 'sail'; b.sailSet = 1; applyColours(b);
@@ -533,9 +563,18 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     }
     G.loot = null;
   };
+  // one hold shared by the fleet
   const holdUsed = () => Object.values(G.cargo).reduce((a, b) => a + b, 0);
-  const holdRoom = () => Math.max(0, Math.round(G.player.C.hold) - holdUsed());
-  G.holdUsed = holdUsed; G.holdRoom = holdRoom;
+  const holdCap = () => Math.round(G.player.C.hold + G.consorts().reduce((a, s) => a + s.C.hold, 0));
+  const holdRoom = () => Math.max(0, holdCap() - holdUsed());
+  G.holdUsed = holdUsed; G.holdRoom = holdRoom; G.holdCap = holdCap;
+  // a lost ship takes her share of the cargo down with her
+  function trimHold(lost) {
+    let over = holdUsed() - holdCap(); if (over <= 0) return;
+    const gone = over;
+    for (const g of [...GOODS].sort((a, b) => G.cargo[b.id] - G.cargo[a.id])) { const k = Math.min(over, G.cargo[g.id]); G.cargo[g.id] -= k; if (G.stolen[g.id]) G.stolen[g.id] = Math.min(G.stolen[g.id], G.cargo[g.id]); over -= k; if (!over) break; }
+    say(gone + ' crates went down with the ' + lost.name + '.', 'warn');
+  }
   // ---------------- the Ladder ----------------
   function spawnRival(r) {
     const p = G.player, rank = ladder.rankOf(r);
@@ -670,11 +709,14 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     return k;
   };
   G.sellAll = () => { let total = 0; for (const g of GOODS) { const n = G.cargo[g.id]; if (n > 0) { const before = G.gold; G.trade(g.id, -n); total += G.gold - before; } } return total; };
-  G.repairCost = () => { const p = G.player; return Math.round((p.maxHull - p.hull) * 4 + (p.maxSails - p.sails) * 2.5); };
-  G.repair = () => { const p = G.player, c = G.repairCost(); if (c <= 0 || G.gold < c) return false; G.gold -= c; p.hull = p.maxHull; p.sails = p.maxSails; for (const f of p.fires) f.grp.parent && f.grp.parent.remove(f.grp); fx.dropFires(p.fires); p.fires = []; say('Repaired the ' + p.name + ' for ' + c + ' gold.'); emit('coin', -c); return true; };
-  G.hire = (n) => { const p = G.player; p.crew = Math.floor(p.crew); const k = Math.min(Math.floor(n), p.maxCrew - p.crew, Math.floor(G.gold / 6)); if (k <= 0) return false; G.gold -= 6 * k; p.crew += k; say('Signed on ' + k + ' hands.'); emit('coin', -6 * k); return true; };
-  G.upgradeCost = k => [600, 1200, 2400][G.upgrades[k]] ?? null;
-  G.upgrade = k => { const c = G.upgradeCost(k); if (c === null || G.gold < c) return false; G.gold -= c; G.upgrades[k]++; if (k === 'hull') { G.player.maxHull = Math.round(G.player.C.hull * (1 + 0.1 * G.upgrades.hull)); G.player.hull = G.player.maxHull; } say('Shipwright: ' + k + ' upgraded.'); emit('coin', -c); return true; };
+  const fleet = () => [G.player, ...G.consorts()];
+  G.fleet = fleet;
+  G.repairCost = () => fleet().reduce((a, p) => a + Math.round((p.maxHull - p.hull) * 4 + (p.maxSails - p.sails) * 2.5), 0);
+  G.repair = () => { const c = G.repairCost(); if (c <= 0 || G.gold < c) return false; G.gold -= c; for (const p of fleet()) { p.hull = p.maxHull; p.sails = p.maxSails; for (const f of p.fires) f.grp.parent && f.grp.parent.remove(f.grp); fx.dropFires(p.fires); p.fires = []; } say('Repaired the ' + (G.consorts().length ? 'fleet' : G.player.name) + ' for ' + c + ' gold.'); emit('coin', -c); return true; };
+  // hands sign on for the whole fleet: the flagship first, then each consort
+  G.hire = (n) => { let left = Math.floor(n), hired = 0; for (const p of fleet()) { p.crew = Math.floor(p.crew); const k = Math.min(left, p.maxCrew - p.crew, Math.floor(G.gold / 6)); if (k <= 0) continue; G.gold -= 6 * k; p.crew += k; left -= k; hired += k; } if (!hired) return false; say('Signed on ' + hired + ' hands.'); emit('coin', -6 * hired); return true; };
+  G.upgradeCost = (k, s = G.player) => [600, 1200, 2400][s.up[k]] ?? null;
+  G.upgrade = (k, s = G.player) => { const c = G.upgradeCost(k, s); if (c === null || G.gold < c) return false; G.gold -= c; s.up[k]++; if (k === 'hull') { s.maxHull = Math.round(s.C.hull * (1 + 0.1 * s.up.hull)); s.hull = s.maxHull; } say('Shipwright: the ' + s.name + '’s ' + k + ' upgraded.'); emit('coin', -c); return true; };
   G.buyShip = (cls) => {
     const C = CLASSES[cls], p = G.player; if (!C.price) return false;
     const tradeIn = Math.round(CLASSES[p.cls].price * 0.5 * (p.hull / p.maxHull));
@@ -683,7 +725,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const m = G.moor({ T: TYPES[cls] });
     const n = spawn({ cls, nation: 'pirate', role: 'player', name: p.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, crewFrac: 0, seed: 3 });
     n.crew = Math.min(n.maxCrew, p.crew); n.state = 'docked'; n.mesh.setFurled(true);
-    remove(p); G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 };
+    remove(p); G.player = n;
     applyColours(n);
     say('Bought a ' + C.name.toLowerCase() + ' (trade-in ' + tradeIn + ' gold).', 'good'); emit('flagship', n); emit('coin', -C.price);
     return true;
@@ -728,7 +770,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     else if (n('pirate') < 2 && G.t > 200) spawnTraffic('pirate');
     // drop ships that have left the chart
     for (const s of [...G.ships]) {
-      if (s.role === 'player' || G.boarding && (G.boarding.a === s || G.boarding.b === s)) continue;
+      if (isFleet(s) || G.boarding && (G.boarding.a === s || G.boarding.b === s)) continue;
       const far = Math.hypot(s.x, s.z + 40) > 1150, away = Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420;
       if ((far && away) || (s.arrived && away)) remove(s);
     }
@@ -767,12 +809,12 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const range = s.role === 'navy' ? 300 : 280;
     let tgt = null;
     if (s.threat && s.threat.alive && s.threat.state !== 'sinking' && G.t - s.threatT < 90) tgt = s.threat;
-    else if (foe && fd < range && (s.role === 'pirate' ? foe.role === 'merchant' || (foe.role === 'player' && (s.rival ? rivalDuels(s, foe) : !G.brethren && foe.C.guns <= s.C.guns * 1.2)) : foe.role === 'player' || foe.role === 'pirate')) tgt = foe;
+    else if (foe && fd < range && (s.role === 'pirate' ? foe.role === 'merchant' || (isFleet(foe) && (s.rival ? rivalDuels(s, foe) : !G.brethren && foe.C.guns <= s.C.guns * 1.2)) : isFleet(foe) || foe.role === 'pirate')) tgt = foe;
     // navies always hunt a pirate when their nation is hostile to you; otherwise only one that is wanted
     // (fired on or boarded an honest ship in the last ten minutes) and sails too close. Honest traders pass.
     // a navy also hunts the flag of a crown it is at war with, and never troubles its own or an ally's privateer
-    if (s.role === 'navy' && tgt === P && s.threat !== P) {
-      const C = G.commission, hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - (P.aggroT ?? -1e9) < 600;
+    if (s.role === 'navy' && isFleet(tgt) && !isFleet(s.threat)) {
+      const C = G.commission, hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - G.aggroT < 600;
       const enemyFlag = C && atWar(C.nation, s.nation), ownFlag = C && friendly(C.nation, s.nation);
       if (!(hostileNation || enemyFlag || (!ownFlag && wanted && fd < 170))) tgt = null;
     }
@@ -788,10 +830,53 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (followPath(s, 40)) { if (s.destPort) nextPatrol(s); else s.arrived = true; }
   }
 
+  // ---------------- consorts ----------------
+  // Station: echelon astern of the flagship. Fight: the flagship's target once she has opened fire, or anyone
+  // attacking the fleet. In port: anchor off the pier head; sail again when the flagship does.
+  const SLOTS = [[-34, -20], [-62, 20]]; // [astern, to starboard] in metres
+  G.anchorFor = (s, P = G.dockPort) => { const i = G.consorts().indexOf(s); return { x: P.x + (i === 1 ? 38 : -38), z: P.moorZ + 34, psi: 0 }; };
+  function fleetFoe(s) {
+    let best = null, bd = 320;
+    for (const o of G.ships) {
+      if (!o.alive || isFleet(o) || o.state === 'sinking' || o.state === 'struck' || o.state === 'docked') continue;
+      const d = Math.hypot(o.x - s.x, o.z - s.z);
+      if (o.state === 'engage' && isFleet(o.target) && d < bd) { bd = d; best = o; }
+    }
+    if (best) return best;
+    const t = G.selected;
+    if (t && t.alive && !isFleet(t) && t.state !== 'sinking' && t.state !== 'struck' && G.t - G.fleetFireT < 30 && Math.hypot(t.x - s.x, t.z - s.z) < 420) return t;
+    return null;
+  }
+  function consortThink(s) {
+    const P = G.player;
+    if (G.docked || G.docking) { // into the harbour, and anchor
+      const a = G.anchorFor(s), d = Math.hypot(a.x - s.x, a.z - s.z);
+      if (s.state === 'docked') return;
+      if (d < 10) { s.state = 'docked'; s.v = 0; s.sailSet = 0; s.rudder = 0; s.psi = a.psi; s.mesh.setFurled(true); return; }
+      // beat up to the harbour like any ship; inside it the harbour boats tow her to her anchorage
+      s.state = 'sail'; s.towed = d < 160; const want = headingTo(a.x - s.x, a.z - s.z);
+      steerTo(s, avoid(s, s.towed ? want : sailable(s, want))); s.sailSet = d > 60 ? 0.8 : 0.3;
+      if (s.towed) s.v = Math.min(Math.max(s.v, Math.min(2.6, 0.8 + d * 0.03)), 1.2 + d * 0.05);
+      return;
+    }
+    if (s.state === 'docked') { s.state = 'sail'; s.mesh.setFurled(false); s.towed = false; }
+    const foe = fleetFoe(s);
+    if (foe) { s.state = 'engage'; s.target = foe; s.shot = P.shot; s.lag = false; engage(s, foe); return; }
+    s.state = 'sail'; s.target = null; s.towed = false;
+    const i = Math.max(0, G.consorts().indexOf(s)), [back, side] = SLOTS[i];
+    const fx_ = Math.cos(P.psi), fz = -Math.sin(P.psi), rx = Math.sin(P.psi), rz = Math.cos(P.psi);
+    const tx = P.x + fx_ * back + rx * side, tz = P.z + fz * back + rz * side;
+    const d = Math.hypot(tx - s.x, tz - s.z), ahead = (s.x - tx) * fx_ + (s.z - tz) * fz;
+    s.lag = d > 50 && ahead < 0;
+    G.fleetWait = G.consorts().some(c => c.lag && Math.hypot(c.x - P.x, c.z - P.z) > 90); // the flagship eases off until her consorts are up
+    steerTo(s, avoid(s, sailable(s, d > 14 ? headingTo(tx - s.x, tz - s.z) : P.psi)));
+    s.sailSet = ahead > 10 ? 0.5 : d > 45 ? 1 : Math.min(1, Math.max(0.3, P.sailSet + (d - 15) * 0.02));
+  }
+
   // ---------------- AI captain ----------------
   G.ai = { phase: 'look', target: null, msg: 'Looking for a prize', t: 0, portT: 0 };
   function scoreTarget(p, o) {
-    if (!o.alive || o.role === 'player' || o.state === 'sinking' || o.looted || o.prize || o.state === 'docked') return -1;
+    if (!o.alive || isFleet(o) || o.role === 'lost' || o.state === 'sinking' || o.looted || o.prize || o.state === 'docked') return -1;
     if (o.role === 'navy' && o.C.guns > p.C.guns * 0.9) return -1;
     if (o.C.guns * (o.role === 'merchant' ? 0.55 : 1) > p.C.guns * (0.6 + 0.6 * p.hull / p.maxHull)) return -1; // too heavy a broadside for us today
     const d = Math.hypot(o.x - p.x, o.z - p.z); if (d > 700) return -1;
@@ -1005,7 +1090,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     stepMarkets(dt);
     ladder.step(dt);
     const P = G.player;
-    for (const s of G.ships) { s.think -= dt; if (s.role !== 'player' && s.think <= 0 && s.state !== 'boarding' && s.state !== 'sinking') { s.think = 0.35; npcThink(s); } }
+    for (const s of G.ships) { s.think -= dt; if (s.role !== 'player' && s.role !== 'lost' && s.think <= 0 && s.state !== 'boarding' && s.state !== 'sinking') { s.think = 0.35; if (s.role === 'consort') consortThink(s); else npcThink(s); } }
     if (G.autopilot && P.state !== 'sinking') { G.aiThink = (G.aiThink || 0) - dt; if (G.aiThink <= 0 || G.docking) { G.aiThink = 0.3; captain(dt * 0 + 0.3); } }
     playerHelm(dt);
     stepBoarding(dt);
@@ -1026,7 +1111,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       const n = spawn({ cls: 'sloop', nation: 'pirate', role: 'player', name: 'Second Chance', x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
       n.crew = Math.round(n.maxCrew * 0.7);
       if (P.alive) remove(P);
-      G.player = n; G.upgrades = { hull: 0, sails: 0, guns: 0 }; applyColours(n);
+      G.player = n; applyColours(n);
       n.state = 'docked'; n.mesh.setFurled(true); G.docked = true; G.port = openPort(G.dockPort);
       say('You wash up in ' + G.dockPort.name + ' with half your gold (' + half + ' lost) and a free sloop.', 'bad');
       flash('Shipwrecked', 'Half your gold is gone. The governor lends you a sloop.', 6);
@@ -1048,7 +1133,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
       tradeProfit: G.tradeProfit, port: G.dockPort.id, rng: rnd.getState(),
       commission: G.commission && { ...G.commission }, brethren: G.brethren, stolen: { ...G.stolen }, ladder: ladder.snapshot(),
       markets: Object.fromEntries(Object.entries(G.markets).map(([id, m]) => [id, Object.fromEntries(Object.entries(m).map(([g, v]) => [g, { mod: v.mod, k: v.k }]))])),
-      ship: { cls: p.cls, name: p.name, hull: p.hull, sails: p.sails, crew: p.crew, maxHull: p.maxHull, morale: p.morale },
+      ship: { cls: p.cls, name: p.name, hull: p.hull, sails: p.sails, crew: p.crew, maxHull: p.maxHull, morale: p.morale, up: { ...p.up } },
+      consorts: G.consorts().map(s => ({ cls: s.cls, name: s.name, nation: s.nation, hull: s.hull, sails: s.sails, crew: s.crew, maxHull: s.maxHull, up: { ...s.up } })),
     };
   };
   // throws on anything that is not a Black Tide save, before touching the game
@@ -1065,7 +1151,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     Object.assign(G, {
       t: d.t, phase: d.phase, weather: d.weather, weatherTarget: d.weatherTarget, nextWeather: d.nextWeather, windBase: d.windBase,
       gold: d.gold, fame: d.fame, prizes: d.prizes, rank: d.rank, slot, tradeProfit: d.tradeProfit || 0,
-      cargo: Object.fromEntries(GOODS.map(g => [g.id, d.cargo[g.id] || 0])), standing: { ...G.standing, ...d.standing }, upgrades: { hull: 0, sails: 0, guns: 0, ...d.upgrades },
+      cargo: Object.fromEntries(GOODS.map(g => [g.id, d.cargo[g.id] || 0])), standing: { ...G.standing, ...d.standing },
       commission: d.commission ? { ...d.commission } : null, brethren: !!d.brethren, stolen: { ...(d.stolen || {}) },
       attract: false, autopilot: false, order: 'hunt', boarding: null, loot: null, sinking: null, docking: false, course: null, selected: null, banner: null, autoDock: false, spawnT: 0,
     });
@@ -1076,9 +1162,16 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const P = PORT_BY_ID[d.port]; G.dockPort = P;
     const m = G.moor({ T: TYPES[d.ship.cls] });
     const n = spawn({ id: 'player', cls: d.ship.cls, nation: 'pirate', role: 'player', name: d.ship.name, x: m.x, z: m.z, psi: 0, v: 0, sailSet: 0, seed: 3 });
+    n.up = { hull: 0, sails: 0, guns: 0, ...(d.ship.up || d.upgrades) };
     n.maxHull = d.ship.maxHull || n.maxHull; n.hull = Math.min(n.maxHull, d.ship.hull); n.sails = Math.min(n.maxSails, d.ship.sails); n.crew = Math.min(n.maxCrew, d.ship.crew); n.morale = d.ship.morale ?? 1;
     n.state = 'docked'; n.mesh.setFurled(true); applyColours(n);
     G.player = n; G.docked = true; G.port = openPort(P);
+    for (const c of d.consorts || []) { // consorts come back at anchor off the pier
+      const s = spawn({ cls: c.cls, nation: c.nation || 'pirate', role: 'consort', name: c.name, x: P.x, z: P.moorZ + 34, psi: 0, v: 0, sailSet: 0 });
+      const a = G.anchorFor(s); s.x = a.x; s.z = a.z;
+      Object.assign(s, { hull: c.hull, sails: c.sails, crew: c.crew, maxHull: c.maxHull || s.maxHull, up: { hull: 0, sails: 0, guns: 0, ...c.up }, state: 'docked' });
+      s.mesh.setFurled(true); applyColours(s);
+    }
     say('Welcome back, captain. The ' + n.name + ' is moored at ' + P.name + '.', 'good');
     G.placeAll();
     emit('flagship', n); emit('dock', n); emit('restored', d);
@@ -1091,7 +1184,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     G.spawnT = 5;
     const merchants = G.ships.filter(s => s.role === 'merchant' && s.alive && !s.looted && s.state !== 'sinking').length;
     if (merchants < 2) spawnTraffic('merchant');
-    for (const s of [...G.ships]) if (s.role !== 'player' && Math.hypot(s.x, s.z + 40) > 1150 && Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420) remove(s);
+    for (const s of [...G.ships]) if (!isFleet(s) && Math.hypot(s.x, s.z + 40) > 1150 && Math.hypot(s.x - G.player.x, s.z - G.player.z) > 420) remove(s);
   }
   G.setupAttract = () => {
     G.phase = 0.5; G.windBase = -Math.PI / 2; G.wind.from = -Math.PI / 2; // a southerly: the chase is a reach, the run home to port is downwind
