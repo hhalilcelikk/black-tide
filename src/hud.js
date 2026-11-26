@@ -1,9 +1,10 @@
 // The HUD: Cinderwatch-style pixel plates over the 3D sea, the port screen, and all input.
 import * as THREE from 'three';
 import { CLASSES, NATIONS, TYPES } from './ship.js';
-import { GOODS, SHOTS, ISLANDS, RIVALS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
+import { GOODS, SHOTS, ISLANDS, compass, compassName, pointOfSail, wrap, headingTo } from './game.js';
 import { PORTS, PORT_BY_ID } from './ports.js';
 import { NATION_IDS, relation, standingWord, MARQUE_AT, CLOSED_BELOW, RANKS, BRETHREN_PRIZES } from './nations.js';
+import { STYLES as RIVAL_STYLES } from './ladder.js';
 import { autosave, listSaves, newestSave, loadSlot, exportCareer, importCareer } from './save.js';
 import { phaseName } from './looks.js';
 import { isWater } from './nav.js';
@@ -256,13 +257,21 @@ export function createHud(ctx, audio) {
 
   // ---------- chart marks ----------
   const isl = ISLANDS.map(i => { const d = document.createElement('div'); d.className = 'isl' + (i.port ? ' harbour' : ''); if (i.port) d.innerHTML = `<i class="flag ${FLAGS[i.nation]}"></i> `; d.append(i.name); el.marks.appendChild(d); return { i, d }; });
-  const marks = new Map();
+  const marks = new Map(), sightMarks = new Map();
   function updateMarks() {
     const chart = view.mode === 'chase' && view.vh > 180;
     const op = chart ? Math.min(1, (view.vh - 180) / 120) : 0;
     el.marks.style.opacity = op;
     if (!op) return;
     for (const { i, d } of isl) { const q = project(i.x, 6, i.z); d.style.left = q.x + 'px'; d.style.top = q.y + 'px'; }
+    const seenS = new Set();
+    for (const S of G.ladder.sightings) {
+      seenS.add(S.id);
+      let d = sightMarks.get(S.id);
+      if (!d) { d = document.createElement('div'); d.className = 'isl sighting'; d.textContent = '✕ ' + G.ladder.byId(S.id).name; el.marks.appendChild(d); sightMarks.set(S.id, d); }
+      const q = project(S.x, 2, S.z); d.style.left = q.x + 'px'; d.style.top = q.y + 'px';
+    }
+    for (const [id, d] of sightMarks) if (!seenS.has(id)) { d.remove(); sightMarks.delete(id); }
     const seen = new Set();
     for (const s of G.ships) {
       if (!s.alive) continue; seen.add(s);
@@ -273,7 +282,7 @@ export function createHud(ctx, audio) {
       m.style.left = q.x + 'px'; m.style.top = q.y + 'px';
       const rot = -(compass(s.psi) - (view.mode === 'chase' ? compass(Math.PI - view.az * Math.PI / 180) * (view.vh > 400 ? 0 : 0) : 0));
       m.firstChild.style.transform = `rotate(${compass(s.psi) - 0}deg)`;
-      const label = s.role === 'player' ? s.name : (s === G.selected ? s.name : '');
+      const label = s.role === 'player' || s.rival || s === G.selected ? s.name : '';
       if (m.lastChild.textContent !== label) m.lastChild.textContent = label;
     }
     for (const [s, m] of marks) if (!seen.has(s)) { m.remove(); marks.delete(s); }
@@ -291,6 +300,13 @@ export function createHud(ctx, audio) {
     "Hangman's Cove buys powder and silver and asks no questions about where it came from.",
     'Santa Catalina ships silver north under escort. The escorts are thinner every month.',
   ];
+  // a sighting of a famous captain: they linger there for ten minutes, and the spot goes on your chart
+  const placeName = (x, z) => { const i = ISLANDS.reduce((a, b) => Math.hypot(b.x - x, b.z - z) < Math.hypot(a.x - x, a.z - z) ? b : a); return Math.hypot(i.x - x, i.z - z) < 260 ? 'off ' + i.name : 'in open water, ' + compassName(compass(headingTo(x - i.x, z - i.z))) + ' of ' + i.name; };
+  function rivalRumour() {
+    const r = G.ladder.rumour(G.port.rumourSeed ^ 0x5157); if (!r) return null;
+    const rank = G.ladder.rankOf(r);
+    return `${r.name}, #${rank} on the Ladder, ${RIVAL_STYLES[r.style].label}, was seen ${placeName(r.x, r.z)} in a ${CLASSES[r.cls].name.toLowerCase()}. <span class="amber">Marked on your chart.</span>`;
+  }
   // one rumour is a real tip from the markets: the best thing to carry from this port, as prices stand
   function tradeTip(here) {
     const P0 = G.prices(here); let best = null;
@@ -332,7 +348,7 @@ export function createHud(ctx, audio) {
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Ships for sale</h2><p class="lede">Trade-in for your ${CLASSES[p.cls].name.toLowerCase()}: ${tradeIn} gold.</p><div class="cards">` +
         ['sloop', 'schooner', 'brigantine', 'frigate'].map(k => { const C = CLASSES[k]; const own = k === p.cls; return `<div class="card"><b class="fell">${C.name}</b><span class="dim">${C.role}</span><div class="kv"><span>Guns</span><b>${C.guns}</b><span>Crew</span><b>${C.crew}</b><span>Hold</span><b>${C.hold}</b><span>Speed</span><b>${C.knots} kn</b></div><button data-buy="${k}" ${!own && G.gold + tradeIn >= C.price ? '' : 'disabled'}>${own ? 'Your ship' : fmt(C.price) + ' gold'}</button></div>`; }).join('') + `</div>`;
     } else if (s === 'tavern') {
-      const r = (G.port.rumours = G.port.rumours || [tradeTip(G.port.id), ...shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 2)]);
+      const r = (G.port.rumours = G.port.rumours || [tradeTip(G.port.id), rivalRumour(), ...shuffled(RUMOURS, mulberry32(G.port.rumourSeed)).slice(0, 1)].filter(Boolean));
       h = head(PD.tavern, PD.tavernLine) + purse +
         `<div class="cards"><div class="card"><b class="fell">Sign on hands</b><span class="dim">Crew ${Math.round(p.crew)}/${p.maxCrew} · 6 gold a head</span><button data-act="hire10" ${p.crew < p.maxCrew && G.gold >= 60 ? '' : 'disabled'}>Hire 10</button><button data-act="hirefull" ${p.crew < p.maxCrew && G.gold >= 6 ? '' : 'disabled'}>Hire to full</button></div></div>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Rumours</h2>` + r.map(x => `<p class="rumour">${x}</p>`).join('');
@@ -358,10 +374,20 @@ export function createHud(ctx, audio) {
       h = head(PD.governor, PD.govLine) + `<div class="cards">${commission}${offer}</div>` +
         `<table class="tbl" style="margin-top:calc(var(--px)*6)"><tr><th>Crown</th><th>Standing</th><th></th><th>${C ? 'To your flag' : ''}</th></tr>${rows}</table>`;
     } else if (s === 'board') {
-      const you = G.rank;
-      const rows = RIVALS.slice(0, 10).map((r, i) => `<tr><td>#${i + 1}</td><td class="l">${r[0]}</td><td><i class="flag ${FLAGS[r[1]]}"></i></td><td>${[1900, 1640, 1500, 1380, 1210, 1100, 990, 940, 870, 800][i]}</td></tr>`).join('');
-      h = head('Harbour board', 'Bounties nailed over bounties. In the middle, under glass, the Ladder of Famous Captains.') +
-        `<table class="tbl"><tr><th>Rank</th><th class="l">Captain</th><th>Flag</th><th>Fame</th></tr>${rows}<tr class="you"><td>${you === null ? '–' : '#' + you}</td><td class="l">You · ${G.title()}</td><td><i class="flag jolly"></i></td><td>${G.fame}</td></tr></table>` +
+      // the top ten, then the captains around you
+      const T = G.ladder.table(), you = T.findIndex(x => x.you), show = new Set([...Array(10).keys()]);
+      if (you >= 0) for (let i = you - 2; i <= you + 2; i++) if (i >= 0 && i < T.length) show.add(i);
+      let last = -1, rows = '';
+      for (const i of [...show].sort((a, b) => a - b)) {
+        if (i > last + 1) rows += `<tr><td colspan="4" class="dim">⋮</td></tr>`;
+        const x = T[i];
+        rows += x.you ? `<tr class="you"><td>#${i + 1}</td><td class="l">You · ${G.title()}</td><td><i class="flag ${G.colours()}"></i></td><td>${fmt(G.fame)}</td></tr>`
+          : `<tr><td>#${i + 1}</td><td class="l">${x.r.name}</td><td><i class="flag ${FLAGS[x.r.nation]}"></i></td><td>${fmt(x.r.fame)}</td></tr>`;
+        last = i;
+      }
+      if (you < 0) rows += `<tr class="you"><td>–</td><td class="l">You · take a prize to be known</td><td><i class="flag ${G.colours()}"></i></td><td>${fmt(G.fame)}</td></tr>`;
+      h = head('Harbour board', 'Bounties nailed over bounties. In the middle, under glass, the Ladder of Famous Captains. Beat a captain to take their place.') +
+        `<table class="tbl"><tr><th>Rank</th><th class="l">Captain</th><th>Flag</th><th>Fame</th></tr>${rows}</table>` +
         `<h2 class="fell" style="margin-top:calc(var(--px)*8)">Bounties</h2><p class="rumour">500 gold: the pirate sloop Merry Widow, last seen off Gull Cay.</p><p class="rumour">250 gold: news of the Spanish galleon San Telmo's route.</p>`;
     }
     body.innerHTML = h;
@@ -428,7 +454,7 @@ export function createHud(ctx, audio) {
     if (t && !G.docked) {
       const fk = t.flagKind === 'white' ? 'white' : t.flagKind === 'captured' ? 'jolly' : FLAGS[t.nation];
       if (el.tFlag._k !== fk) { el.tFlag.className = 'flag ' + fk; el.tFlag._k = fk; }
-      txt(el.tName, t.name); txt(el.tCls, NATIONS[t.nation].adj + ' ' + CLASSES[t.cls].name.toLowerCase() + ' · ' + t.C.guns + ' guns');
+      txt(el.tName, t.name); txt(el.tCls, (t.rival ? '#' + G.ladder.rankOf(G.ladder.byId(t.rival)) + ' on the Ladder · ' : NATIONS[t.nation].adj + ' ') + CLASSES[t.cls].name.toLowerCase() + ' · ' + t.C.guns + ' guns');
       pct(el.tHull, t.hull / t.maxHull); txt(el.tHullN, String(Math.max(0, Math.round(t.hull))));
       pct(el.tSails, t.sails / t.maxSails); txt(el.tSailsN, String(Math.round(t.sails)));
       pct(el.tCrew, t.crew / t.maxCrew); txt(el.tCrewN, String(Math.round(t.crew)));

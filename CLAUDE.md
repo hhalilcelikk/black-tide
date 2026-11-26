@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren, ladder
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -45,6 +45,11 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 - `src/nations.js` holds the wars and alliances, the standing thresholds (letter of marque at 8, harbour closed below -8) and the commission ranks. `G.standing` covers the four crowns plus `pirate` for the Brethren.
 - `credit()` in game.js is the single place a prize or a sinking changes standing and pays a commission. `G.legal(ship)` decides what is a lawful prize, `G.welcome(port)` which harbours let you in, and `G.colours()` the flag you fly. Navies and pirates read these in `npcThink`, and the AI captain and trade planner only use welcoming ports.
 - A new piece of politics goes through these functions rather than special cases in the AI or the HUD, and into the save.
+
+## The Ladder
+
+- `src/ladder.js` owns the fifty rivals. The top twenty move on the chart as positions. One becomes a real ship (role `pirate`, `s.rival` set) within 420 m of you, at most two at a time plus a rumoured one, and goes back to the chart beyond 650 m. Rank is your place in the fame table. `ladder.beat()` gives you a rival's place, and `rerank()` pays every title bracket passed.
+- The ladder runs on its own seeded stream (`lrnd`), so its off-screen raids never shift the sim's random numbers, and it saves with the career.
 
 ## Saves
 

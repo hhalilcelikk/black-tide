@@ -1,0 +1,160 @@
+[
+ {
+  "do": "eval",
+  "js": "window.G = window.__bt.G; G.attract"
+ },
+ {
+  "do": "until",
+  "js": "G.rank !== null",
+  "max": 600,
+  "step": 1
+ },
+ {
+  "do": "expect",
+  "js": "G.rank !== null && G.t < 600 && G.title() === 'Sea Rat'",
+  "msg": "the page's opening (the AI captain's first prize) puts you on the Ladder as a Sea Rat inside ten minutes"
+ },
+ {
+  "do": "expect",
+  "js": "G.log.some(l => /Sea Rat/.test(l.text)) || G.banner",
+  "msg": "the new title is announced"
+ },
+ {
+  "do": "eval",
+  "js": "G.takeHelm(), G.attract"
+ },
+ {
+  "do": "eval",
+  "js": "({ t: Math.round(G.t), rank: G.rank, fame: G.fame, gold: G.gold })"
+ },
+ {
+  "do": "eval",
+  "js": "G.handHelm('port'), G.ai.portGoal"
+ },
+ {
+  "do": "until",
+  "js": "G.docked",
+  "max": 400,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "G.takeHelm(), document.querySelector('[data-port=tavern]').click(), [...document.querySelectorAll('.rumour')].map(e => e.textContent)"
+ },
+ {
+  "do": "expect",
+  "js": "G.ladder.sightings.length === 1 && [...document.querySelectorAll('.rumour')].some(e => /on the Ladder/.test(e.textContent) && /Marked on your chart/.test(e.textContent))",
+  "msg": "the tavern names a ranked rival's sighting and marks it on the chart"
+ },
+ {
+  "do": "shot",
+  "out": "shots/ladder-tavern.png"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const S = G.ladder.sightings[0], r = G.ladder.byId(S.id); window.RIV = { id: S.id, name: r.name, rank: G.ladder.rankOf(r), fame: r.fame, myRank: G.rank }; G.leavePort(); G.setCourse(G.player, S.x, S.z); G.player.sailSet = 1; return window.RIV; })()"
+ },
+ {
+  "do": "until",
+  "js": "G.ships.some(s => s.rival === RIV.id)",
+  "max": 400,
+  "step": 1
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const s = G.ships.find(s => s.rival === RIV.id); return s && Math.hypot(s.x - G.player.x, s.z - G.player.z) < 450; })()",
+  "msg": "following the rumour, the named rival is there as a real ship"
+ },
+ {
+  "do": "expect",
+  "js": "!G.ladder.sightings.some(S => S.id === RIV.id)",
+  "msg": "the chart mark clears once the rival is in sight"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const v = window.__bt.view; v.set('chart'); return true; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 1,
+  "print": false
+ },
+ {
+  "do": "shot",
+  "out": "shots/ladder-chart.png"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const s = G.ships.find(s => s.rival === RIV.id); window.gold0 = G.gold; s.threat = G.player; s.threatT = G.t; s.hull = 0; return s.name; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 1,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "G.rank === RIV.rank",
+  "msg": "sinking the rival gives you their place on the Ladder"
+ },
+ {
+  "do": "expect",
+  "js": "G.ladder.rankOf(G.ladder.byId(RIV.id)) > RIV.rank && G.ladder.byId(RIV.id).fame < RIV.fame",
+  "msg": "the beaten rival falls"
+ },
+ {
+  "do": "expect",
+  "js": "G.gold > gold0 + 100 && G.log.some(l => /Your new title/.test(l.text))",
+  "msg": "every bracket of ten passed pays a reward, announced in the banner and log"
+ },
+ {
+  "do": "eval",
+  "js": "({ rank: G.rank, title: G.title(), gold: G.gold - gold0, rival: [G.ladder.rankOf(G.ladder.byId(RIV.id)), G.ladder.byId(RIV.id).fame] })"
+ },
+ {
+  "do": "eval",
+  "js": "window.FAME = Object.fromEntries(G.ladder.rivals.map(r => [r.id, r.fame])), window.beatenFame = G.ladder.byId(RIV.id).fame, true"
+ },
+ {
+  "do": "advance",
+  "sec": 600,
+  "print": false
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const up = G.ladder.rivals.filter(r => r.fame > FAME[r.id]).length; window.UP = { up, beaten: [beatenFame, G.ladder.byId(RIV.id).fame] }; return up >= 10 && G.ladder.byId(RIV.id).fame > beatenFame; })()",
+  "msg": "ten minutes on, rivals have won fights off-screen and the beaten one is climbing back"
+ },
+ {
+  "do": "eval",
+  "js": "window.UP"
+ },
+ {
+  "do": "expect",
+  "js": "(() => { const d = G.snapshot(); return d.ladder && d.ladder.rivals.length === 50 && d.ladder.rivals.find(r => r.id === RIV.id).fame === G.ladder.byId(RIV.id).fame; })()",
+  "msg": "the Ladder is part of the save"
+ },
+ {
+  "do": "eval",
+  "js": "G.handHelm('port'), true"
+ },
+ {
+  "do": "until",
+  "js": "G.docked",
+  "max": 400,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "document.querySelector('[data-port=board]').click(), true"
+ },
+ {
+  "do": "expect",
+  "js": "document.querySelector('.tbl tr.you') && /You \u00b7/.test(document.querySelector('.tbl tr.you').textContent)",
+  "msg": "the harbour board shows you among the captains"
+ },
+ {
+  "do": "shot",
+  "out": "shots/ladder-board.png"
+ }
+]

@@ -134,6 +134,11 @@
  },
  {
   "do": "eval",
+  "js": "(() => { for (const x of [...G.ships]) if (x !== G.player) G.remove(x); G.ladder.rivals.forEach(r => r.beatenT = G.t); return G.ships.length; })()",
+  "_note": "isolate the navy check: empty sea, rivals held on the chart for five minutes"
+ },
+ {
+  "do": "eval",
   "js": "window.navyE = spawnNavy('english', 90), window.navyS = spawnNavy('spanish', -90), [navyE, navyS]"
  },
  {
