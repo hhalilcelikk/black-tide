@@ -70,16 +70,16 @@ export function createSerpent({ scene, U, fx, G, api, seed }) {
       if (Sp.state !== 'diving') { Sp.state = 'diving'; Sp.t = 0; Sp.leaving = true; }
     }
     let speed = 0, want = Sp.psi;
-    if (Sp.state === 'rising') { Sp.depth = Math.max(0, 10 * (1 - Sp.t / 2.5)); speed = 6; if (Sp.t > 2.5) { Sp.state = 'circling'; Sp.t = 0; Sp.lap = 10 + srnd() * 6; } }
+    if (Sp.state === 'rising') { Sp.depth = Math.max(0, 10 * (1 - Sp.t / 2.5)); speed = 9; if (Sp.t > 2.5) { Sp.state = 'circling'; Sp.t = 0; Sp.lap = 10 + srnd() * 6; } }
     if (Sp.state === 'circling') {
-      Sp.depth = 0; speed = 9;
-      Sp.angle += Sp.dir * dt * 9 / 45;
+      Sp.depth = 0; speed = 13; // faster than any ship, so it can circle one under full sail
+      Sp.angle += Sp.dir * dt * 13 / 45;
       const tx = T.x + Math.cos(Sp.angle) * 45, tz = T.z + Math.sin(Sp.angle) * 45;
       want = Math.atan2(-(tz - Sp.z), tx - Sp.x);
       if (Sp.t > Sp.lap) { Sp.state = 'ram'; Sp.t = 0; api.say('The serpent turns on the ' + T.name + '!', 'warn'); }
     }
     if (Sp.state === 'ram') {
-      speed = 14; want = Math.atan2(-(T.z - Sp.z), T.x - Sp.x);
+      speed = 19; want = Math.atan2(-(T.z - Sp.z), T.x - Sp.x);
       if (Math.hypot(T.x - Sp.x, T.z - Sp.z) < T.T.L * 0.5 + 3) {
         T.hull -= 14; T.crew = Math.max(1, T.crew - 2); T.heel += 0.12 * (srnd() < 0.5 ? -1 : 1);
         fx.splash(new THREE.Vector3(Sp.x, 0, Sp.z), G.t, 2.6);
@@ -88,7 +88,7 @@ export function createSerpent({ scene, U, fx, G, api, seed }) {
       } else if (Sp.t > 8) { Sp.state = 'diving'; Sp.t = 0; }
     }
     if (Sp.state === 'diving') {
-      speed = 8; Sp.depth = Math.min(10, Sp.t * 5);
+      speed = 12; Sp.depth = Math.min(10, Sp.t * 5);
       if (Sp.t > (Sp.leaving ? 2 : 6)) {
         if (Sp.leaving) { Sp.state = 'hidden'; Sp.leaving = false; group.visible = false; api.say('The serpent is gone into the deep.', 'info'); return; }
         rise(T, Sp.angle + Math.PI * (0.6 + srnd() * 0.8));
@@ -96,7 +96,7 @@ export function createSerpent({ scene, U, fx, G, api, seed }) {
     }
     // swim: turn toward where it wants to go, lay down the trail the body follows
     const d = ((want - Sp.psi + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    Sp.psi += Math.max(-1.6 * dt, Math.min(1.6 * dt, d));
+    Sp.psi += Math.max(-2.2 * dt, Math.min(2.2 * dt, d));
     Sp.x += Math.cos(Sp.psi) * speed * dt; Sp.z -= Math.sin(Sp.psi) * speed * dt;
     const last = Sp.trail[0];
     if (!last || Math.hypot(last[0] - Sp.x, last[1] - Sp.z) > SPACING / 4) { Sp.trail.unshift([Sp.x, Sp.z]); Sp.trail.length = Math.min(Sp.trail.length, N * 4 + 4); }

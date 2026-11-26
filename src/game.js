@@ -9,9 +9,9 @@ import { lookAt } from './looks.js';
 import { PORTS, PORT_BY_ID, nearestPort } from './ports.js';
 import { createSerpent, SERPENT_ZONE } from './serpent.js';
 import { createLadder, STYLES as RIVAL_STYLES, titleFor } from './ladder.js';
-import { NATION_IDS, relation, atWar, friendly, MARQUE_AT, CLOSED_BELOW, BRETHREN_PRIZES, RANKS } from './nations.js';
+import { NATION_IDS, relation, atWar, friendly, MARQUE_AT, CLOSED_BELOW, HUNT_BELOW, BRETHREN_PRIZES, RANKS } from './nations.js';
 
-const TAU = Math.PI * 2, D2R = Math.PI / 180, KN = 0.75; // game metres per second per knot
+const TAU = Math.PI * 2, D2R = Math.PI / 180, KN = 0.75, PACE = 1.35, ARCADE = true; // KN: game metres per second per knot
 export const wrap = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
 export const headingTo = (dx, dz) => Math.atan2(-dz, dx);
 export const compass = psi => ((90 - psi / D2R) % 360 + 360) % 360; // degrees clockwise from north (-z)
@@ -186,7 +186,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const off = Math.abs(wrap(s.psi - w.from));
     // a consort off her station crowds on sail to catch up (a fleet otherwise sails at its slowest ship's pace)
     const up = (isFleet(s) ? 1 + 0.06 * s.up.sails : 1) * (s.role === 'consort' && s.lag ? 1.2 : 1) * (s.role === 'player' && G.fleetWait ? 0.8 : 1);
-    let target = C.knots * KN * up * polar(off, C) * s.sailAmt * Math.min(1.35, w.speed) * (0.3 + 0.7 * s.sails / s.maxSails);
+    // PACE: everything sails a third faster than its nominal knots; torn canvas costs speed, but gently
+    let target = PACE * C.knots * KN * up * polar(off, C) * s.sailAmt * Math.min(1.35, w.speed) * (0.65 + 0.35 * s.sails / s.maxSails);
     if (s.state === 'struck' || s.state === 'sinking' || s.state === 'docked') target = 0;
     if (s.state === 'boarding') target = Math.min(target, 0.6);
     const tau = 1.6 + C.hull / 140; // she gathers way quickly
@@ -208,7 +209,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const L = s.T.L, draft = -(s.T.T * 0.8);
     const bx = nx + Math.cos(s.psi) * L * 0.46, bz = nz - Math.sin(s.psi) * L * 0.46;
     if (s.state !== 'sinking' && (groundAt(bx, bz) > draft || groundAt(nx, nz) > draft)) {
-      if (s.v > 2.6 && G.t - s.aground > 4) { s.hull -= s.v * 1.1; s.aground = G.t; if (s.role === 'player') say('Ran aground! The hull groans.', 'bad'); emit('hit', { s, x: bx, z: bz }); }
+      if (s.v > 4 && G.t - s.aground > 5) { s.hull -= s.v * 0.5; s.aground = G.t; if (s.role === 'player') say('Ran aground! The hull groans.', 'bad'); emit('hit', { s, x: bx, z: bz }); }
       // back her off and swing the bow toward deeper water
       const gx = groundAt(bx + 3, bz) - groundAt(bx - 3, bz), gz = groundAt(bx, bz + 3) - groundAt(bx, bz - 3);
       if (gx || gz) { const away = headingTo(-gx, -gz); s.psi = wrap(s.psi + Math.max(-0.02, Math.min(0.02, wrap(away - s.psi)))); }
@@ -252,7 +253,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.sideTo = sideTo;
   function fire(s, side, aimAt) {
     if (s.reload[side] > 0 || s.state === 'struck' || s.state === 'sinking' || s.state === 'docked' || s.state === 'boarding') return false;
-    if (isFleet(s) && aimAt && !G.legal(aimAt)) G.aggroT = G.t;
+    // firing on an honest ship makes you wanted; firing back at one that is attacking you does not
+    if (isFleet(s) && aimAt && !G.legal(aimAt) && !(aimAt.state === 'engage' && isFleet(aimAt.target))) G.aggroT = G.t;
     if (s.role === 'player') G.fleetFireT = G.t;
     s.shotsFired = (s.shotsFired || 0) + 1;
     const shot = SHOTS[s.shot];
@@ -299,9 +301,10 @@ export function createGame({ scene, U, fx, seed = 7 }) {
 
   function damage(s, shot, by, px, py, pz, part) {
     const w = (GUNW[by.cls] || 1) * (by.role === 'merchant' ? 0.55 : 1), S = SHOTS[shot]; // merchant crews are poor gunners
-    const shield = isFleet(s) ? 1 / (1 + 0.1 * s.up.hull) : 1;
-    if (part === 'rig') { s.sails -= shot === 'chain' ? S.sails * w : S.sails * 2 * w; s.crew -= shot === 'grape' ? S.crew * w : 0; s.hull -= S.hull * w * 0.2; }
-    else { s.hull -= S.hull * w * shield; s.sails -= S.sails * w * 0.5; s.crew -= S.crew * w * (0.6 + rnd() * 0.8); }
+    // your fleet takes about half damage: fights are quick, but you always get the chance to fight back or run
+    const shield = isFleet(s) ? 0.55 / (1 + 0.1 * s.up.hull) : 1;
+    if (part === 'rig') { const k = isFleet(s) ? 0.55 : 1; s.sails -= (shot === 'chain' ? S.sails * w : S.sails * 2 * w) * k; s.crew -= (shot === 'grape' ? S.crew * w : 0) * k; s.hull -= S.hull * w * 0.2 * k; }
+    else { s.hull -= S.hull * w * shield; s.sails -= S.sails * w * 0.5 * (isFleet(s) ? 0.55 : 1); s.crew -= S.crew * w * (0.6 + rnd() * 0.8) * (isFleet(s) ? 0.55 : 1); }
     s.sails = Math.max(0, s.sails); s.crew = Math.max(0, s.crew);
     s.hitT = G.t;
     if (!isFleet(s) && by && (!s.threat || s.threat === by)) { s.threat = by; s.threatT = G.t; }
@@ -395,7 +398,10 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     s.rudder = Math.max(-1, Math.min(1, -d * gain));
   }
   const clearance = (s, a, max = 150) => { const c = Math.cos(a), sn = -Math.sin(a); for (let k = 12; k <= max; k += 12) if (groundAt(s.x + c * k, s.z + sn * k) > -4.5) return k; return max; };
+  // with the arcade polar every heading makes way, so the AI steers straight for where it is going
+  // (tacking up to windward only made zigzags and ran ships into islands)
   function sailable(s, psiDes) {
+    if (ARCADE) return psiDes;
     const w = G.wind, p = (s.C.point + 6) * D2R;
     const d = wrap(psiDes - w.from);
     if (Math.abs(d) >= p) return psiDes;
@@ -414,7 +420,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const look = Math.max(36, s.v * 7 + s.T.L * 0.8);
     const ok = a => { const c = Math.cos(a), sn = -Math.sin(a); for (const k of [0.2, 0.45, 0.7, 1]) if (groundAt(s.x + c * look * k, s.z + sn * look * k) > -4.5) return false; return true; };
     if (ok(psiDes)) return psiDes;
-    const nogo = a => Math.abs(wrap(a - G.wind.from)) < (s.C.point + 4) * D2R;
+    const nogo = a => !ARCADE && Math.abs(wrap(a - G.wind.from)) < (s.C.point + 4) * D2R;
     const sideOf = a => Math.sign(wrap(a - G.wind.from)) || 1;
     const mine = sideOf(s.psi);
     // fan out from the wanted heading, keeping to our side of the wind if we can (no tack, no wear);
@@ -824,7 +830,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   function spawnTraffic(role, near) {
     let from, to, nation;
     if (role === 'merchant') { from = pick(TRADERS); to = pick(TRADERS.filter(P => P !== from)); nation = from.nation; }
-    else if (role === 'navy') { from = pick(TRADERS); to = pick(PORTS.filter(P => P !== from && P.nation !== 'pirate')); nation = from.nation; }
+    else if (role === 'navy') { from = pick(TRADERS); nation = from.nation; to = pick(PORTS.filter(P => P !== from && P.nation !== 'pirate' && !atWar(nation, P.nation))) || from; } // a navy keeps out of its enemies' waters
     else { from = PORT_BY_ID.cove; to = pick(TRADERS); nation = 'pirate'; }
     let start = from.exit;
     if (!farFromPlayer(start)) start = pick(EDGES.filter(farFromPlayer)) || pick(EDGES);
@@ -841,7 +847,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   }
   // a patrol that reaches its port turns for another
   function nextPatrol(s) {
-    const to = pick(PORTS.filter(P => P.id !== s.destPort && (s.role === 'pirate' ? P.nation !== 'pirate' : true)));
+    const to = pick(PORTS.filter(P => P.id !== s.destPort && (s.role === 'pirate' ? P.nation !== 'pirate' : P.nation !== 'pirate' && !atWar(s.nation, P.nation)))) || PORT_BY_ID[s.destPort] || PORTS[0];
     s.destPort = to.id; s.dest = to.exit; s.path = route(s.x, s.z, ...to.exit); s.wp = 0;
   }
   G.spawnTraffic = spawnTraffic;
@@ -923,7 +929,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     // (fired on or boarded an honest ship in the last ten minutes) and sails too close. Honest traders pass.
     // a navy also hunts the flag of a crown it is at war with, and never troubles its own or an ally's privateer
     if (s.role === 'navy' && isFleet(tgt) && !isFleet(s.threat)) {
-      const C = G.commission, hostileNation = (G.standing[s.nation] || 0) < -2, wanted = G.t - G.aggroT < 600;
+      const C = G.commission, hostileNation = (G.standing[s.nation] || 0) < HUNT_BELOW, wanted = G.t - G.aggroT < 600;
       const enemyFlag = C && atWar(C.nation, s.nation), ownFlag = C && friendly(C.nation, s.nation);
       if (!(hostileNation || enemyFlag || (!ownFlag && wanted && fd < 170))) tgt = null;
     }

@@ -73,8 +73,8 @@ export function makeFx(U) {
   const gulls = new THREE.InstancedMesh(gg.build(), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }), NG);
   gulls.frustumCulled = false;
   const gullData = Array.from({ length: NG }, (_, i) => ({ c: i < 8 ? V(-40 + rnd() * 50, 0, -60 + rnd() * 40) : V(rnd() * 120 - 60, 0, rnd() * 80 - 20), r: 14 + rnd() * 30, h: 16 + rnd() * 22, s: (0.25 + rnd() * 0.2) * (rnd() < 0.5 ? -1 : 1), p: rnd() * 6 }));
-  // rain streaks around the camera
-  const NR = 5200, rp = new Float32Array(NR * 6), ra = new Float32Array(NR * 2);
+  // rain streaks in a box around the view's focus, sized to cover the screen (uSize metres across)
+  const NR = 14000, rp = new Float32Array(NR * 6), ra = new Float32Array(NR * 2);
   for (let i = 0; i < NR; i++) {
     const x = rnd() * 50 - 25, y = rnd() * 40, z = rnd() * 50 - 25;
     rp.set([x, y, z, x, y, z], i * 6); ra[i * 2] = 0; ra[i * 2 + 1] = 1;
@@ -83,15 +83,17 @@ export function makeFx(U) {
   rgeo.setAttribute('position', new THREE.BufferAttribute(rp, 3));
   rgeo.setAttribute('aEnd', new THREE.BufferAttribute(ra, 1));
   const rainMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: U.uTime, uCam: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uAmb: U.uAmb },
+    uniforms: { uTime: U.uTime, uCam: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uAmb: U.uAmb, uSize: { value: 50 } },
     vertexShader: /* glsl */`
-      uniform float uTime, uAmt; uniform vec3 uCam; attribute float aEnd;
+      uniform float uTime, uAmt, uSize; uniform vec3 uCam; attribute float aEnd;
       void main(){
-        vec3 p = position;
-        p.y = mod(p.y - uTime * 21.0, 40.0) - 4.0 + uCam.y;
-        p.x = mod(p.x - uCam.x + 25.0 + uTime * 4.0, 50.0) - 25.0 + uCam.x;
-        p.z = mod(p.z - uCam.z + 25.0, 50.0) - 25.0 + uCam.z;
-        p += vec3(-0.18, 0.75, 0.0) * aEnd;
+        // the streaks were laid out in a 50 m box; stretch it to uSize so the rain always fills the view
+        float k = uSize / 50.0, h = 40.0 * min(k, 2.0);
+        vec3 p = position * vec3(k, h / 40.0, k);
+        p.y = mod(p.y - uTime * 21.0 * min(k, 2.0), h) - 4.0 + uCam.y;
+        p.x = mod(p.x - uCam.x + uSize * 0.5 + uTime * 4.0, uSize) - uSize * 0.5 + uCam.x;
+        p.z = mod(p.z - uCam.z + uSize * 0.5, uSize) - uSize * 0.5 + uCam.z;
+        p += vec3(-0.18, 0.75, 0.0) * aEnd * min(k, 2.0);
         if (uAmt < 0.01) p = vec3(0.0, -1000.0, 0.0);
         gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
       }`,
@@ -164,7 +166,8 @@ export function makeFx(U) {
   }
 
   let lastFlash = null;
-  function update(t, cam, rainAmt, focus) {
+  function update(t, cam, rainAmt, focus, rainSize = 50) {
+    rainMat.uniforms.uSize.value = rainSize;
     let n = 0;
     for (let i = puffs.length - 1; i >= 0; i--) {
       const p = puffs[i], a = t - p.t0;
@@ -286,6 +289,6 @@ export function makeFx(U) {
   bolt.visible = false; bolt.frustumCulled = false;
   group.add(bolt);
   function dropFires(list) { for (const f of list) { const i = fires.indexOf(f); if (i >= 0) fires.splice(i, 1); if (f.grp.parent) f.grp.parent.remove(f.grp); } }
-  return { group, broadside, muzzle, hit, splash: splashAt, skirmish, setBalls, dropFires, update(t, cam, rainAmt, focus) { const r = update(t, cam, rainAmt, focus); updateFires(t, true); return r; }, flashLight, smokeMat, addFire, fires, bolt,
+  return { group, broadside, muzzle, hit, splash: splashAt, skirmish, setBalls, dropFires, update(t, cam, rainAmt, focus, rainSize) { const r = update(t, cam, rainAmt, focus, rainSize); updateFires(t, true); return r; }, flashLight, smokeMat, addFire, fires, bolt,
     clear() { puffs.length = 0; flashes.length = 0; splashes.length = 0; splinters.length = 0; for (const f of fires) f.lastSmoke = null; } };
 }

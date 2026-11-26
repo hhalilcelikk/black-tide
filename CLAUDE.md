@@ -34,7 +34,7 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 
 ## Pace
 
-Black Tide is for quick sessions, not a long grind: fun has to start at once. The opening takes its first prize by about t=60. A free-play career starts with a prize in sight, and `director()` puts a merchant across your bow after 25 quiet seconds. Sailing uses an arcade polar: head to wind still makes about a third of a ship's speed, with no stalling. Broadsides bear 45 degrees either side of the beam, reload in about 3 s, and a merchant strikes in 10-20 s. Keep changes in this spirit, and keep `tests/combat.json` green.
+Black Tide is for quick sessions, not a long grind: fun has to start at once. The opening takes its first prize by about t=60. A free-play career starts with a prize in sight, and `director()` puts a merchant across your bow after 25 quiet seconds. Sailing uses an arcade polar (`ARCADE`, `PACE = 1.35` in game.js): head to wind still makes about 40% of a ship's speed, so the AI steers straight with no tacking. Torn sails cost speed only gently. Your fleet takes 55% damage, so a frigate needs about four broadsides to sink a sloop. Navies hunt you on sight only below standing -12, and patrol their own, allied and neutral ports, never an enemy's. Returning fire is never a crime. Broadsides bear 45 degrees either side of the beam, reload in about 3 s, and a merchant strikes in 10-20 s. Keep changes in this spirit, and keep `tests/combat.json` green.
 
 ## The world and its ports
 

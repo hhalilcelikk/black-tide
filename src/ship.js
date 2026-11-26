@@ -73,9 +73,9 @@ export const CLASSES = {
   sloop: { name: 'Sloop', role: 'Quick raider. Where every career starts.', guns: 6, crew: 40, hold: 40, hull: 60, sails: 60, knots: 9.5, turn: 1.0, point: 40, best: 95, price: 1200 },
   schooner: { name: 'Schooner', role: 'Fastest to windward. A smuggler\'s favourite.', guns: 8, crew: 50, hold: 60, hull: 75, sails: 70, knots: 10, turn: 0.9, point: 38, best: 100, price: 2400 },
   brigantine: { name: 'Brigantine', role: 'The pirate all-rounder. Fights and runs.', guns: 12, crew: 80, hold: 90, hull: 110, sails: 100, knots: 8.5, turn: 0.75, point: 48, best: 110, price: 4800 },
-  fluyt: { name: 'Fluyt', role: 'Dutch cargo hauler. Huge hold, few guns.', guns: 8, crew: 30, hold: 220, hull: 120, sails: 100, knots: 6.5, turn: 0.55, point: 60, best: 135, price: 3600 },
+  fluyt: { name: 'Fluyt', role: 'Dutch cargo hauler. Huge hold, few guns.', guns: 8, crew: 30, hold: 220, hull: 120, sails: 100, knots: 7.5, turn: 0.55, point: 60, best: 135, price: 3600 },
   frigate: { name: 'Frigate', role: 'Navy hunter. Fast for her size, many guns.', guns: 18, crew: 160, hold: 120, hull: 180, sails: 150, knots: 9, turn: 0.6, point: 55, best: 125, price: 9000 },
-  galleon: { name: 'Galleon', role: 'Treasure ship. Slow, tall, rich.', guns: 14, crew: 180, hold: 260, hull: 220, sails: 160, knots: 6.5, turn: 0.45, point: 62, best: 140, price: 8000 },
+  galleon: { name: 'Galleon', role: 'Treasure ship. Slow, tall, rich.', guns: 14, crew: 180, hold: 260, hull: 220, sails: 160, knots: 7.5, turn: 0.45, point: 62, best: 140, price: 8000 },
   manowar: { name: 'Man-o\'-War', role: 'Two gun decks. Flagship of a navy.', guns: 44, crew: 350, hold: 180, hull: 320, sails: 220, knots: 7.5, turn: 0.4, point: 60, best: 135, price: 0 },
 };
 

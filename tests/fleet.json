@@ -106,7 +106,7 @@
  },
  {
   "do": "eval",
-  "js": "(() => { for (const x of [...G.ships]) if (!G.isFleet(x)) G.remove(x); G.ladder.rivals.forEach(r => r.beatenT = G.t); /* isolate the check: empty sea, rivals held on the chart */ const p = G.player; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: p.x - Math.sin(p.psi) * 70, z: p.z - Math.cos(p.psi) * 70, psi: p.psi, v: p.v }); m.path = null; G.selected = m; window.TGT = m.id; p.reload['-1'] = 0; p.reload['1'] = 0; return m.name; })()"
+  "js": "(() => { for (const x of [...G.ships]) if (!G.isFleet(x)) G.remove(x); G.ladder.rivals.forEach(r => r.beatenT = G.t); /* isolate the check: empty sea, rivals held on the chart */ for (const c of G.consorts()) { c.hull = c.maxHull; c.sails = c.maxSails; } /* patched up after the last fight */ const p = G.player; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: p.x - Math.sin(p.psi) * 70, z: p.z - Math.cos(p.psi) * 70, psi: p.psi, v: p.v }); m.path = null; G.selected = m; window.TGT = m.id; p.reload['-1'] = 0; p.reload['1'] = 0; return m.name; })()"
  },
  {
   "do": "key",
@@ -128,7 +128,7 @@
  },
  {
   "do": "eval",
-  "js": "(() => { const m = G.ships.find(s => s.id === TGT); if (m) G.remove(m); G.selected = null; G.fleetFireT = -1e9; G.handHelm('port'); return G.ai.portGoal; })()"
+  "js": "(() => { const m = G.ships.find(s => s.id === TGT); if (m) G.remove(m); G.selected = null; G.fleetFireT = -1e9; for (const x of [...G.ships]) if (!G.isFleet(x)) G.remove(x); G.ladder.rivals.forEach(r => r.beatenT = G.t); G.quietT = -1e9; G.handHelm('port'); return G.ai.portGoal; })()"
  },
  {
   "do": "until",
@@ -143,7 +143,7 @@
  },
  {
   "do": "expect",
-  "js": "G.consorts().every(s => s.state === 'docked' && Math.hypot(s.x - G.anchorFor(s).x, s.z - G.anchorFor(s).z) < 15)",
+  "js": "G.consorts().length === 2 && G.consorts().every(s => s.state === 'docked' && Math.hypot(s.x - G.anchorFor(s).x, s.z - G.anchorFor(s).z) < 15)",
   "msg": "both consorts follow the flagship into port and anchor off the pier"
  },
  {

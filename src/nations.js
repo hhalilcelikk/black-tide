@@ -11,6 +11,7 @@ export const atWar = (a, b) => relation(a, b) === 'war';
 export const friendly = (a, b) => a === b || relation(a, b) === 'allied';
 
 export const MARQUE_AT = 8;     // standing a governor wants before he offers a letter of marque
+export const HUNT_BELOW = -12;  // below this a crown's navy hunts you on sight (Spain starts at -10: closed, but not hunted)
 export const CLOSED_BELOW = -8; // below this a port closes its harbour to you (two prizes from a neutral crown)
 export const BRETHREN_PRIZES = 1; // the cove only takes captains who have taken a prize
 

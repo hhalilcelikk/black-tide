@@ -276,7 +276,9 @@ function render(dt) {
   } else if (!capture) { state.lightning = 0; fx.bolt.visible = false; }
   applyLook(t, state.lightning);
   wakes();
-  fx.update(t, cam, cur.rain, _focus);
+  // rain fills the view: a box around you on deck, as wide as the screen from above, none at chart height
+  const viewH = view.iso ? view.iso.vh : view.vh, overhead = view.mode !== 'deck';
+  fx.update(t, cam, overhead && viewH > 250 ? 0 : cur.rain, _focus, overhead ? Math.max(60, viewH * (W / H) * 1.35) : 50);
   sky.position.copy(cam.position);
   clouds.material.emissive.copy(U.uHorizon.value).multiplyScalar(0.4);
   U.uSunDirView.value.copy(U.uSunDir.value).transformDirection(cam.matrixWorldInverse);
