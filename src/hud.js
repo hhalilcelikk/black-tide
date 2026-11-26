@@ -178,6 +178,8 @@ export function createHud(ctx, audio) {
   el.skyBtn.addEventListener('click', () => { el.skymenu.hidden = !el.skymenu.hidden; el.skyBtn.setAttribute('aria-expanded', String(!el.skymenu.hidden)); });
   const SKY = { day: 0.3, dusk: 0.6, night: 0.8 };
   for (const b of document.querySelectorAll('[data-sky]')) b.addEventListener('click', () => { G.phase = SKY[b.dataset.sky]; });
+  for (const b of document.querySelectorAll('[data-q]')) b.addEventListener('click', () => { ctx.setQuality(b.dataset.q); for (const x of document.querySelectorAll('[data-q]')) x.setAttribute('aria-pressed', String(x.dataset.q === ctx.quality)); });
+  for (const x of document.querySelectorAll('[data-q]')) x.setAttribute('aria-pressed', String(x.dataset.q === ctx.quality));
   for (const b of document.querySelectorAll('[data-wx]')) b.addEventListener('click', () => { G.weatherTarget = +b.dataset.wx; G.weather = +b.dataset.wx; G.nextWeather = 400; });
   for (const b of document.querySelectorAll('[data-loot]')) b.addEventListener('click', () => G.takeLoot(b.dataset.loot));
   for (const b of document.querySelectorAll('[data-port]')) b.addEventListener('click', () => { if (b.dataset.port === 'leave') { G.leavePort(); return; } if (G.port) { G.port.screen = b.dataset.port; renderPort(); } });

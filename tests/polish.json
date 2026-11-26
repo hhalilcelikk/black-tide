@@ -1,0 +1,177 @@
+[
+ {
+  "do": "eval",
+  "js": "window.B = window.__bt; window.G = B.G; window.A = B.audio; A.unlock(); window.upd = (n, dt) => { for (let i = 0; i < n; i++) A.update(dt); return A.context; }; A.songs"
+ },
+ {
+  "do": "wait",
+  "ms": 300
+ },
+ {
+  "do": "expect",
+  "js": "A.ready && A.songs.includes('Leave Her, Johnny') && A.songs.includes('Haul Away Joe') && A.songs.includes('Drunken Sailor')",
+  "msg": "three shanties: Drunken Sailor, Haul Away Joe and Leave Her, Johnny"
+ },
+ {
+  "do": "eval",
+  "js": "upd(30, 0.1), [A.context, A.contextFor(), G.docked, G.weather, G.ai.phase]"
+ },
+ {
+  "do": "expect",
+  "js": "A.context === 'sea' && A.caption().length > 0",
+  "msg": "at sea a shanty plays with its lyric caption"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const seen = new Set(), caps = new Set(); for (let i = 0; i < 60; i++) { A.update(6); seen.add(A.songTitle); if (A.text) caps.add(A.songTitle + ': ' + A.text); } window.CAPS = [...caps]; return [...seen]; })()"
+ },
+ {
+  "do": "expect",
+  "js": "['Haul Away Joe', 'Leave Her, Johnny'].every(t => CAPS.some(c => c.startsWith(t + ':')))",
+  "msg": "the new shanties come round in turn, each with captions"
+ },
+ {
+  "do": "eval",
+  "js": "CAPS.filter(c => /Johnny|Joe/.test(c)).slice(0, 4)"
+ },
+ {
+  "do": "eval",
+  "js": "G.setCourse(G.player, 160, 220), G.player.sailSet = 1"
+ },
+ {
+  "do": "until",
+  "js": "Math.hypot(G.player.x - G.ports[0].x, G.player.z - G.ports[0].z) > 220",
+  "max": 120,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const p = G.player; const e = G.spawn({ cls: 'brigantine', nation: 'pirate', role: 'pirate', name: 'Rook', x: p.x + 120, z: p.z, psi: Math.PI, v: 3 }); e.path = null; window.EN = e.id; return e.C.guns; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 4,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "upd(30, 0.1), [A.context, A.contextFor(), G.docked, G.weather, G.ai.phase]"
+ },
+ {
+  "do": "expect",
+  "js": "A.context === 'battle' && A.caption() === ''",
+  "msg": "when a ship attacks, the music turns to battle drums (no shanty caption)"
+ },
+ {
+  "do": "expect",
+  "js": "A.busTarget('battle') > 0.2 && A.busTarget('sea') < 0.08",
+  "msg": "the crossfade sends the drums up and the shanty down"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { G.remove(G.ships.find(s => s.id === EN)); G.handHelm('port'); return G.ai.portGoal; })()"
+ },
+ {
+  "do": "until",
+  "js": "G.docked",
+  "max": 300,
+  "step": 1
+ },
+ {
+  "do": "eval",
+  "js": "upd(30, 0.1), [A.context, A.contextFor(), G.docked, G.weather, G.ai.phase]"
+ },
+ {
+  "do": "expect",
+  "js": "A.context === 'port' && A.busTarget('port') > 0.18 && A.busTarget('battle') < 0.08",
+  "msg": "in port the tavern fiddler takes over"
+ },
+ {
+  "do": "eval",
+  "js": "G.takeHelm(), G.leavePort(), G.weather = 1, G.weatherTarget = 1, G.nextWeather = 999, true"
+ },
+ {
+  "do": "advance",
+  "sec": 20,
+  "print": false
+ },
+ {
+  "do": "eval",
+  "js": "upd(30, 0.1), [A.context, A.contextFor(), G.docked, G.weather, G.ai.phase]"
+ },
+ {
+  "do": "expect",
+  "js": "A.context === 'storm' && A.busTarget('storm') > 0.18",
+  "msg": "in a storm a low drone replaces the shanty"
+ },
+ {
+  "do": "eval",
+  "js": "G.weather = 0, G.weatherTarget = 0, G.player.sails = G.player.maxSails * 0.15, G.placeAll(), G.player.mesh.torn"
+ },
+ {
+  "do": "expect",
+  "js": "G.player.mesh.torn > 0.6",
+  "msg": "heavy sail damage shows as torn sails"
+ },
+ {
+  "do": "eval",
+  "js": "(() => { const v = B.view; v.set('chase'); v.vh = v.vhT = 26; return true; })()"
+ },
+ {
+  "do": "advance",
+  "sec": 1,
+  "print": false
+ },
+ {
+  "do": "shot",
+  "out": "shots/polish-torn.png"
+ },
+ {
+  "do": "eval",
+  "js": "G.player.sails = G.player.maxSails, G.placeAll(), G.player.mesh.torn"
+ },
+ {
+  "do": "expect",
+  "js": "G.player.mesh.torn === 0",
+  "msg": "repaired sails are whole again"
+ },
+ {
+  "do": "eval",
+  "js": "B.view.set('chart'), B.view.vh = 620, B.render(), G.player.mesh.group.children.filter(o => o.isLineSegments).map(o => o.visible)"
+ },
+ {
+  "do": "expect",
+  "js": "G.player.mesh.group.children.filter(o => o.isLineSegments).every(o => !o.visible)",
+  "msg": "from chart height ships drop their rigging"
+ },
+ {
+  "do": "eval",
+  "js": "[B.ctx.pickQuality(40), B.ctx.pickQuality(25), B.ctx.pickQuality(16)]"
+ },
+ {
+  "do": "expect",
+  "js": "B.ctx.pickQuality(40) === 'low' && B.ctx.pickQuality(25) === 'medium' && B.ctx.pickQuality(16) === 'high'",
+  "msg": "the frame rate picks the quality: slow is Low, middling Medium, fast High"
+ },
+ {
+  "do": "eval",
+  "js": "B.view.set('chase'), window.iw0 = B.post.iw, document.getElementById('skyBtn').click(), document.querySelector('[data-q=low]').click(), [iw0, B.post.iw, localStorage.getItem('bt-quality')]"
+ },
+ {
+  "do": "expect",
+  "js": "B.ctx.quality === 'low' && B.post.iw < iw0 * 0.8 && localStorage.getItem('bt-quality') === 'low' && document.querySelector('[data-q=low]').getAttribute('aria-pressed') === 'true'",
+  "msg": "the Sky menu sets Low quality: a smaller internal resolution, saved"
+ },
+ {
+  "do": "shot",
+  "out": "shots/polish-low.png"
+ },
+ {
+  "do": "reload"
+ },
+ {
+  "do": "expect",
+  "js": "window.__bt.quality() === 'low'",
+  "msg": "the quality setting survives a reload"
+ }
+]

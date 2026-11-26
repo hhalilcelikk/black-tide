@@ -48,11 +48,11 @@ Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromi
 | `src/detail.js` | The ten 64-pixel material textures with relief |
 | `src/looks.js` | Dawn, day, dusk, night and storm, and the day cycle that blends them |
 | `src/fx.js` | Smoke, fires, cannonballs, splashes, rain, lightning, gulls |
-| `src/audio.js` | Sea and wind beds, cannon, bells and the shanty with captions |
+| `src/audio.js` | Sea and wind beds, cannon, bells, and the music: three shanties with captions at sea, battle drums, a tavern jig in port and a storm drone, crossfaded by context |
 | `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
 | `src/template.html` | Page shell and the HUD markup and styles |
 | `tools/pixelfont.mjs` | The BT Pixel font: glyph bitmaps and the TrueType builder that `build.mjs` runs |
-| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken) and fleet (two consorts in formation, in a fight, in port, at the shipwright, and taking the flag) and hunt (the Black Wake and the serpent, from rumour to bounty); `tests/hunt-stills.json` shoots both; `tests/ports-stills.json` shoots every harbour |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness. `npm test` runs smoke, port, layout, trade (a sugar run by hand), traderun (the AI captain) traffic (five minutes at sea) save (dock, reload, Continue, export, import), marque (sailing for England), brethren (the pirate path) and ladder (rank, rumour, rival, place taken) and fleet (two consorts in formation, in a fight, in port, at the shipwright, and taking the flag) and hunt (the Black Wake and the serpent, from rumour to bounty) and polish (music contexts, torn sails, chart LOD, quality); `tests/hunt-stills.json` shoots both; `tests/ports-stills.json` shoots every harbour |
 
 ## Credits
 

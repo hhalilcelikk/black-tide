@@ -10,7 +10,7 @@ Live build: https://hhalilcelikk.github.io/black-tide/ (GitHub Pages, rebuilt by
 npm install                      # once
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once, for the test harness
 node build.mjs                   # src/ -> dist/index.html
-npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren, ladder, fleet, hunt
+npm test                         # build + smoke, port, layout (1280, 1024, 1920 wide), trade, traderun, traffic, save, marque, brethren, ladder, fleet, hunt, polish
 .venv/bin/python play.py tests/smoke.json 1280 720 [query]   # gameplay script, query defaults to "test"
 .venv/bin/python shoot.py tests/stills.json [w] [h]          # look-dev stills
 ```
@@ -62,6 +62,11 @@ npm test                         # build + smoke, port, layout (1280, 1024, 1920
 - Corvin Vane's Black Wake (boss livery: black hull, red sails) waits in his zone once a tavern rumour has named it (needs a Ladder rank). `bossThink` takes the weather gauge, opens with chain shot and boards a crippled ship; being boarded and beaten strips your hold and half your gold. Beaten once, he stays beaten.
 - `src/serpent.js` is not a ship: its own seeded stream, its own ball test (`hitBall`), and `stage()` for stills. In its marked water the sky turns black and it rises; elsewhere it only rises in storms far from port.
 - A boarding ends at once if either ship starts to sink.
+
+## Music and quality
+
+- Music runs per context (`sea`, `battle`, `port`, `storm`), each on its own bus. `A.contextFor()` decides, and a new context must hold for 2 s before the crossfade. Songs are data in `audio.js` (notes in beats, 8 beats a line, captions per line). Headless Chrome's audio clock barely runs, so tests check `A.busTarget()`, not live gains.
+- Quality Low/Medium/High (`QUALITY` in main.js) sets internal resolution, shadows, mist and AO. It is picked from frames 30-150 on a first visit and saved as `bt-quality`. In chart view ships drop rigging and flags (`setLod`), and torn sails collapse facets of each ship's own sail geometry (`setTorn`).
 
 ## Saves
 

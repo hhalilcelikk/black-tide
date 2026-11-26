@@ -157,6 +157,8 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   const Yax = new THREE.Vector3(0, 1, 0), Zax = new THREE.Vector3(0, 0, 1), Xax = new THREE.Vector3(1, 0, 0);
   const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
   function place(s) {
+    // below half her canvas a ship's sails show the holes
+    s.mesh.setTorn(s.sails < s.maxSails * 0.6 ? Math.min(1, (0.6 - s.sails / s.maxSails) / 0.5) : 0);
     const L = s.T.L, B = s.T.B, amp = U.uWaveAmp.value, t = G.t, x = s.x, z = s.z, psi = s.psi;
     const fx_ = Math.cos(psi), fz = -Math.sin(psi), rx = Math.sin(psi), rz = Math.cos(psi);
     const hb = waveHeight(x + fx_ * L * 0.4, z + fz * L * 0.4, t, amp), hs = waveHeight(x - fx_ * L * 0.4, z - fz * L * 0.4, t, amp);

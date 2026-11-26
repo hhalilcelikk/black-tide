@@ -162,11 +162,29 @@ const P = {
   mist: new V4(), mistCol: new Col(), sunDir: new V3(), sunCol: new Col(), focus: 30, dofNear: 10, dofFar: 50, dofAmt: 0,
   exposure: 1, time: 0, night: 0, storm: 0, sunVisible: 1,
 };
+// graphics quality: internal resolution, shadows, mist and ambient occlusion. Picked from the frame rate on
+// the first visit (then saved), and changed from the Sky menu.
+const QUALITY = {
+  low: { scale: 0.34, maxH: 420, shadow: 0, mist: 0, ao: 0 },
+  medium: { scale: 0.42, maxH: 520, shadow: 1024, mist: 0.6, ao: 1 },
+  high: { scale: 0.5, maxH: 620, shadow: 2048, mist: 1, ao: 1 },
+};
+let quality = 'high', qualitySaved = false;
+try { const q = localStorage.getItem('bt-quality'); if (QUALITY[q]) { quality = q; qualitySaved = true; } } catch (e) { /* storage may be blocked */ }
+export const pickQuality = avgMs => avgMs > 30 ? 'low' : avgMs > 20 ? 'medium' : 'high';
+function applyQuality(q, save) {
+  if (!QUALITY[q]) return;
+  quality = q; const Qs = QUALITY[q];
+  post.setSize(W, H, Qs.scale, Qs.maxH);
+  sun.castShadow = Qs.shadow > 0;
+  if (Qs.shadow && sun.shadow.mapSize.x !== Qs.shadow) { sun.shadow.mapSize.set(Qs.shadow, Qs.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  if (save) { qualitySaved = true; try { localStorage.setItem('bt-quality', q); } catch (e) { /* ignore */ } }
+}
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   W = Math.max(8, Math.floor(window.innerWidth * dpr)); H = Math.max(8, Math.floor(window.innerHeight * dpr));
   renderer.setSize(W, H, false);
-  post.setSize(W, H);
+  applyQuality(quality, false);
 }
 
 const _w = new V3(), _focus = new V3();
@@ -220,7 +238,7 @@ function applyLook(t, flash) {
     U.uLightPos.value[i].copy(q.p); U.uLightCol.value[i].set(q.c.r * q.k * 0.24, q.c.g * q.k * 0.24, q.c.b * q.k * 0.24);
     P.lightPos[i].copy(q.p); P.lightCol[i].setRGB(q.c.r * q.k * 0.9, q.c.g * q.k * 0.9, q.c.b * q.k * 0.9);
   }
-  P.mist.set(...c.mist); P.mistCol.copy(c.mistCol); P.mistNoise = c.mistNoise; P.sunDir.copy(sd); P.sunCol.copy(U.uSunCol.value);
+  P.mist.set(...c.mist); P.mist.w *= QUALITY[quality].mist; P.ao = QUALITY[quality].ao; P.mistCol.copy(c.mistCol); P.mistNoise = c.mistNoise; P.sunDir.copy(sd); P.sunCol.copy(U.uSunCol.value);
   P.exposure = c.exposure; P.night = c.night; P.storm = c.storm; P.sunVisible = c.sunVis; P.sat = c.sat; P.lift = c.lift;
 }
 
@@ -262,6 +280,8 @@ function render(dt) {
   sky.position.copy(cam.position);
   clouds.material.emissive.copy(U.uHorizon.value).multiplyScalar(0.4);
   U.uSunDirView.value.copy(U.uSunDir.value).transformDirection(cam.matrixWorldInverse);
+  const farLod = view.mode === 'chase' && view.vh > 300 && !view.iso;
+  for (const s of G.ships) s.mesh.setLod(farLod);
   P.dofAmt = view.iso && view.iso.dof ? view.iso.dof : 0;
   if (P.dofAmt) { const depthHalf = (view.iso.vh / 2) / Math.tan(D2R(view.iso.el)); P.focus = view.dist; P.dofNear = depthHalf * 0.34; P.dofFar = depthHalf * 0.75; }
   P.time = t;
@@ -273,7 +293,7 @@ function render(dt) {
 window.addEventListener('resize', resize);
 resize();
 
-const ctx = { G, view, renderer, get cam() { return cam; }, ortho, persp, scene, fx, get W() { return W; }, get H() { return H; } };
+const ctx = { G, view, renderer, get cam() { return cam; }, ortho, persp, scene, fx, setQuality: q => applyQuality(q, true), pickQuality, get quality() { return quality; }, get W() { return W; }, get H() { return H; } };
 
 if (capture) {
   // look-development stills: a staged fleet, a named look, a fixed iso camera
@@ -330,15 +350,20 @@ if (capture) {
   ctx.render = () => render(0);
   if (test) {
     window.__bt = {
-      G, view, ctx,
+      G, view, ctx, audio, post, quality: () => quality,
       advance(sec) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { if (!G.paused) G.step(STEP); attractCam(STEP); updateCamera(STEP); if (hud) hud.tick(STEP); } render(STEP); return this.state(); },
       render() { render(STEP); },
       state() { const p = G.player; return { t: +G.t.toFixed(1), phase: +G.phase.toFixed(3), mode: view.name(), auto: G.autopilot, attract: G.attract, ai: G.ai.msg, docked: G.docked, gold: G.gold, rank: G.rank, prizes: G.prizes, p: { cls: p.cls, x: Math.round(p.x), z: Math.round(p.z), psi: +p.psi.toFixed(2), v: +p.v.toFixed(2), hull: Math.round(p.hull), crew: Math.round(p.crew), state: p.state }, ships: G.ships.map(s => `${s.name}/${s.cls}/${s.role}/${s.state}@${Math.round(s.x)},${Math.round(s.z)} h${Math.round(s.hull)}`), log: G.log.map(l => l.text) }; },
       hud,
     };
   } else {
-    let last = performance.now();
-    const loop = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; ctx.step(dt); requestAnimationFrame(loop); };
+    let last = performance.now(), frames = 0, spent = 0;
+    const loop = (now) => {
+      const raw = now - last, dt = Math.min(0.05, raw / 1000); last = now; ctx.step(dt);
+      // first visit: watch frames 30-150, then pick a quality this machine can carry, and remember it
+      if (!qualitySaved && ++frames > 30) { spent += raw; if (frames === 150) { const q = pickQuality(spent / 120); applyQuality(q, true); G.say('Graphics set to ' + q + ' for this machine (Sky menu to change).'); } }
+      requestAnimationFrame(loop);
+    };
     requestAnimationFrame(loop);
   }
 }

@@ -3,7 +3,7 @@
 // a lit stern gallery, lanterns, crew and cargo. Local frame: +X bow, +Y up, +Z starboard.
 import * as THREE from 'three';
 import { Geo, C, V, mat } from './geo.js';
-import { mulberry32, lerp, smoothstep } from './util.js';
+import { mulberry32, lerp, smoothstep, vnoise } from './util.js';
 import { makeFlag, flagTexture } from './flags.js';
 import { S as DS } from './detail.js';
 import { boatGeo } from './world.js';
@@ -579,7 +579,8 @@ export function buildShip(typeKey, liveryKey, U, seed = 1) {
   group.add(sails);
   const lg = new THREE.BufferGeometry();
   lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-  group.add(new THREE.LineSegments(lg, U.ropeMat));
+  const rig = new THREE.LineSegments(lg, U.ropeMat);
+  group.add(rig);
   group.add(new THREE.Mesh(gw.build(), U.glowMat));
   const gf = new Geo(seed + 5, 0.06); gf.surf(DS.CLOTH, 0.5);
   for (const [a, b, r0] of furls) { gf.rod(a, b, r0 * 0.7, r0 * 0.7, 6, col.sail2); const n = Math.max(2, Math.round(a.distanceTo(b) / 1.6)); for (let i = 0; i < n; i++) gf.ico(r0 * 1.1, 0, mat(...a.clone().lerp(b, (i + 0.5) / n).toArray(), i, i * 2, 0, 1.2, 0.9, 1), i % 2 ? col.sail : col.sail2); }
@@ -592,13 +593,33 @@ export function buildShip(typeKey, liveryKey, U, seed = 1) {
   const ensign = makeFlag(LV.flag, S.L > 20 ? 4.4 : 3, S.L > 20 ? 2.8 : 1.9, U);
   ensign.position.copy(ensignBase).add(V(-0.55, 4.2, 0)); ensign.rotation.y = 0.85; ensign.rotation.z = -0.05;
   group.add(ensign);
+  let pen = null;
   if (fore !== mainTop && fore.top > fore.lowTop) {
-    const pen = makeFlag('pennant', 7, 0.7, U);
+    pen = makeFlag('pennant', 7, 0.7, U);
     pen.position.set(fore.x + 0.1, fore.top - 0.25, 0); pen.rotation.y = 0.7;
     group.add(pen);
   }
+  // torn sails: shot-through cloth loses whole facets in ragged patches (the same patches every time), by
+  // collapsing triangles of this ship's own sail geometry, so the shared sail material stays untouched
+  const sp = sg.attributes.position, sf = sg.attributes.aFlex, p0 = sp.array.slice(), f0 = sf.array.slice(), nTri = p0.length / 9;
+  // big ragged patches: low-frequency noise over the sail's centroids, roughened a little per facet
+  const tearAt = Float32Array.from({ length: nTri }, (_, i) => { const o = i * 9; return 0.8 * vnoise((p0[o] + p0[o + 3] + p0[o + 6]) * 0.12, (p0[o + 1] + p0[o + 4] + p0[o + 7]) * 0.12 + (p0[o + 2] + p0[o + 5] + p0[o + 8]) * 0.08, seed + 7) + 0.2 * (((i * 2654435761) >>> 0) % 1000) / 1000; });
+  let torn = 0, far = false;
   return {
     group, spec: S, lanterns, guns, hull, sails, furled, flags: [flag, ensign], rails: F,
+    setTorn(f) {
+      f = Math.round(f * 20) / 20; if (f === torn) return; torn = f;
+      const p = sp.array, fl = sf.array, cut = f * 0.55;
+      for (let i = 0; i < nTri; i++) {
+        const o = i * 9;
+        if (tearAt[i] < cut) for (let k = 3; k < 9; k++) { p[o + k] = p0[o + (k % 3)]; fl[o + k] = f0[o + (k % 3)]; }
+        else for (let k = 0; k < 9; k++) { p[o + k] = p0[o + k]; fl[o + k] = f0[o + k]; }
+      }
+      sp.needsUpdate = true; sf.needsUpdate = true;
+    },
+    get torn() { return torn; },
+    // seen from chart height: no rigging and no flags (several draw calls a ship nobody can see)
+    setLod(f) { if (f === far) return; far = f; rig.visible = !f; flag.visible = ensign.visible = !f; if (pen) pen.visible = !f; },
     setFurled(b) { sails.visible = !b; furled.visible = b; },
     setFlag(kind) { for (const f of [flag, ensign]) f.material.uniforms.tMap.value = flagTexture(kind); },
     mastTops: mastInfo.map(m => ({ x: m.x, top: m.top })),

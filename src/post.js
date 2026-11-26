@@ -213,7 +213,7 @@ export class Post {
     const r = this.r, M = this.M, T = this.rt;
     for (const k in M) { M[k].uniforms.uNear.value = cam.near; M[k].uniforms.uFar.value = cam.far; M[k].uniforms.uOrtho.value = cam.isOrthographicCamera ? 1 : 0; }
     r.setRenderTarget(T.scene); r.render(scene, cam);
-    this.atmo(cam, P, 1.0);
+    this.atmo(cam, P, P.ao ?? 1.0);
     let src = T.a;
     if (P.dofAmt > 0.001) { // tilt-shift, off unless a shot asks for it
       const u = M.dof.uniforms;
