@@ -1,0 +1,17 @@
+{
+  "name": "black-tide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Black Tide: an open-world pirate RPG in one HTML file",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && .venv/bin/python play.py tests/smoke.json 1280 720"
+  },
+  "dependencies": {
+    "@fontsource/im-fell-english": "^5.3.0",
+    "@fontsource/im-fell-english-sc": "^5.3.0",
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  }
+}

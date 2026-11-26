@@ -1,0 +1,8 @@
+[
+  {"out": "shots/still-dusk.png", "t": 12, "look": "dusk",
+   "iso": {"target": [0, 0, 0], "az": 35, "el": 28, "vh": 70},
+   "fleet": [
+     {"id": "a", "type": "brigantine", "livery": "pirate", "x": 0, "z": 0, "psi": 0.5, "v": 4},
+     {"id": "b", "type": "galleon", "livery": "spanish", "x": 30, "z": -25, "psi": 0.2, "v": 3}
+   ]}
+]

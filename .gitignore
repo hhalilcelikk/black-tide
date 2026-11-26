@@ -1,0 +1,15 @@
+# build output (GitHub Actions rebuilds it for Pages)
+dist/
+node_modules/
+
+# local Python env for play.py / shoot.py
+.venv/
+__pycache__/
+
+# screenshots from play.py and shoot.py
+shots/
+
+# the original prototype archive
+*.zip
+
+.DS_Store

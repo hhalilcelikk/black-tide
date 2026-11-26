@@ -1,0 +1,4 @@
+[
+  {"do": "advance", "sec": 60, "print": false},
+  {"do": "eval", "js": "JSON.stringify(window.__bt.state())"}
+]

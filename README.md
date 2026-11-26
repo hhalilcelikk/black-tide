@@ -1,0 +1,54 @@
+# Black Tide
+
+**Play it:** https://hhalilcelikk.github.io/black-tide/
+
+The playable prototype and look development for Black Tide, a pirate RPG in one HTML file. three.js r170 is bundled into the page and everything else is generated in code: ships, islands, textures, sound and the pixel font.
+
+## Build and run
+
+```
+npm install
+node build.mjs        # writes dist/index.html (about 910 KB, fonts and script inlined)
+```
+
+Open `dist/index.html` in a desktop browser. Every push to `main` rebuilds it and publishes it to GitHub Pages. Useful URL switches:
+
+- `?skip=attract` starts free play in a sloop instead of the AI captain's opening.
+- `?seed=7` sets the world's random seed.
+- `?test` exposes `window.__bt` (`advance(seconds)`, `render()`, `state()`) for scripted tests. `play.py` drives it.
+- `?capture` exposes `window.__ld.shot({...})` for still frames: a named look, a fixed isometric camera and a staged fleet. `shoot.py` drives it, and the key frames were made this way.
+
+## Tests and stills
+
+```
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+npm test                                                  # build, then tests/smoke.json
+.venv/bin/python play.py tests/smoke.json 1280 720        # any gameplay script
+.venv/bin/python shoot.py tests/stills.json               # look-dev stills
+```
+
+Both scripts use Google Chrome if it is installed, otherwise Playwright's Chromium. The script formats are documented at the top of each file, and screenshots go to `shots/`. `CLAUDE.md` has the project rules.
+
+## Where things live
+
+| File | What it does |
+| --- | --- |
+| `src/main.js` | Renderer, cameras (deck, chase, chart, port), light registry, frame loop, test and capture hooks |
+| `src/game.js` | Simulation: wind, sailing polar, tacking and wearing, broadsides, boarding, ports, traffic, the AI captain |
+| `src/hud.js` | Pixel-plate HUD, input, port screens, chart labels, course and target markers |
+| `src/ship.js` | Ship generator (seven classes, five liveries) and the game numbers for each class |
+| `src/world.js` | Islands, town, fort, dock, lighthouse, vegetation and the height bake |
+| `src/ocean.js`, `src/waves.js` | Faceted Gerstner ocean shared by GPU and CPU (buoyancy), shallows, foam, wakes, glints |
+| `src/post.js` | Half-res render, ambient occlusion, lit mist, bloom, ACES, dither, crisp upscale |
+| `src/detail.js` | The ten 64-pixel material textures with relief |
+| `src/looks.js` | Dawn, day, dusk, night and storm, and the day cycle that blends them |
+| `src/fx.js` | Smoke, fires, cannonballs, splashes, rain, lightning, gulls |
+| `src/audio.js` | Sea and wind beds, cannon, bells and the shanty with captions |
+| `src/nav.js` | Depth grid, A* sea routes, line-of-sight checks |
+| `src/template.html` | Page shell and the HUD markup and styles |
+| `fonts/btpixel.woff2`, `tools/pixelfont.py` | The BT Pixel font and the script that draws it |
+| `play.py`, `shoot.py`, `harness.py`, `tests/` | Headless test harness and scripts |
+
+## Credits
+
+three.js (MIT). The post-processing approach and pixel-font idea follow Cinderwatch by kevintngo (MIT). IM Fell fonts by Igino Marini (SIL OFL). "Drunken Sailor" is a traditional shanty.

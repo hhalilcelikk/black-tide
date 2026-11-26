@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Black Tide · Playable prototype</title>
+<style>
+/*
+VOICE: a captain's instruments on a miniature sea; the ship is the subject, the plates stay small and quiet.
+IDEA: Cinderwatch's pixel plates (dark glass, brass edge, notched corners) carry every live number; IM Fell English names places and titles.
+PICTURE: the 3D sea fills the window; plates sit in the four corners and never cover the ship in the chase view.
+COLOUR and TYPE: ink #090b11, brass #6b5236, parchment text #efe4cd, amber #e8b04a for actions, ember #ff8a3c for danger, cold #8fc7ff for wind. Pixel font for numbers and labels, IM Fell English SC for names.
+LAYOUT: purse top left, time top centre, AI captain top right, ship bottom left, helm and wind bottom centre, target and views bottom right.
+*/
+@font-face{font-family:"BT Pixel";src:url(data:font/woff2;base64,__PIXEL__) format("woff2");font-display:block}
+@font-face{font-family:"IM Fell English";src:url(data:font/woff2;base64,__FELL__) format("woff2");font-display:swap}
+@font-face{font-family:"IM Fell English";font-style:italic;src:url(data:font/woff2;base64,__FELLI__) format("woff2");font-display:swap}
+@font-face{font-family:"IM Fell English SC";src:url(data:font/woff2;base64,__FELLSC__) format("woff2");font-display:swap}
+:root{--px:2px;--ink:rgba(9,11,17,.88);--ink2:rgba(24,27,38,.95);--edge:#6b5236;--edge-hi:#e8b04a;--tx:#efe4cd;--dim:#b3a98f;--amber:#e8b04a;--ember:#ff8a3c;--cold:#8fc7ff;--red:#e5553c;--ok:#9fd08a;color-scheme:dark}
+@media (min-width:2400px) and (min-height:1300px){:root{--px:3px}}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:#020308;overflow:hidden;user-select:none;-webkit-user-select:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#ui{position:fixed;inset:0;pointer-events:none;font:400 calc(var(--px)*10)/1 "BT Pixel",ui-monospace,monospace;color:var(--tx);-webkit-font-smoothing:none;font-smooth:never}
+.capture #ui{display:none}
+.plate{position:absolute;pointer-events:auto;background:var(--ink);padding:calc(var(--px)*4) calc(var(--px)*5);
+  clip-path:polygon(var(--px) 0,calc(100% - var(--px)) 0,100% var(--px),100% calc(100% - var(--px)),calc(100% - var(--px)) 100%,var(--px) 100%,0 calc(100% - var(--px)),0 var(--px));
+  box-shadow:inset 0 0 0 var(--px) var(--edge),inset 0 var(--px) 0 calc(var(--px)*1) rgba(232,176,74,.0)}
+.plate.hi{box-shadow:inset 0 0 0 var(--px) var(--edge),inset 0 calc(var(--px)*2) 0 0 rgba(232,176,74,.22)}
+[hidden]{display:none!important}
+b{font-weight:400}
+.dim{color:var(--dim)} .amber{color:var(--amber)} .cold{color:var(--cold)} .ember{color:var(--ember)} .ok{color:var(--ok)} .red{color:var(--red)}
+.row{display:flex;align-items:center;gap:calc(var(--px)*4)}
+.ico{display:inline-block;width:calc(var(--px)*9);height:calc(var(--px)*9);flex:none}
+.ico svg{width:100%;height:100%;display:block}
+.fell{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;letter-spacing:.03em;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:var(--ink2);border:0;cursor:pointer;padding:calc(var(--px)*3) calc(var(--px)*4);min-height:calc(var(--px)*16);line-height:1;
+  clip-path:polygon(var(--px) 0,calc(100% - var(--px)) 0,100% var(--px),100% calc(100% - var(--px)),calc(100% - var(--px)) 100%,var(--px) 100%,0 calc(100% - var(--px)),0 var(--px));
+  box-shadow:inset 0 0 0 var(--px) #4b3c2a;white-space:nowrap}
+@media (pointer:coarse){button{min-height:44px}}
+button:hover{box-shadow:inset 0 0 0 var(--px) var(--edge-hi);color:#fff4d8}
+button:focus-visible{outline:var(--px) solid var(--amber);outline-offset:var(--px)}
+button[aria-pressed=true],button.on{background:var(--amber);color:#1a140c;box-shadow:inset 0 0 0 var(--px) #ffd98a}
+button[aria-pressed=true] kbd,button.go kbd,.btn.go kbd{color:#5a3a12}
+button:disabled{opacity:.45;cursor:default;box-shadow:inset 0 0 0 var(--px) #3a3226;color:var(--dim)}
+.btn{display:block;width:100%;text-align:center}
+.btn.go{background:var(--amber);color:#1a140c}
+kbd{font:inherit;color:var(--amber)}
+/* bars: pixel meters with eight steps of tone */
+.bar{position:relative;height:calc(var(--px)*5);background:#0b0d14;box-shadow:inset 0 0 0 var(--px) #2c2a2a;flex:1}
+.bar>i{position:absolute;left:var(--px);top:var(--px);bottom:var(--px);width:0;background:var(--amber);max-width:calc(100% - var(--px)*2)}
+.bar.thin{height:calc(var(--px)*3)}
+.meter{display:grid;grid-template-columns:calc(var(--px)*28) 1fr calc(var(--px)*18);align-items:center;gap:calc(var(--px)*3);margin-top:calc(var(--px)*3)}
+.meter>b{text-align:right}
+#hullBar,#tHull{background:#d98a4a}#sailBar,#tSails{background:#e9dfc8}#crewBar,#tCrew{background:#9fd08a}
+/* corners */
+.purse{top:calc(var(--px)*6);left:calc(var(--px)*6);display:flex;gap:calc(var(--px)*8);align-items:center}
+.stat{display:flex;align-items:center;gap:calc(var(--px)*3)}
+.topc{top:calc(var(--px)*6);left:50%;transform:translateX(-50%);text-align:center;min-width:calc(var(--px)*150)}
+.topc .row{justify-content:center}
+.topc .bar{margin-top:calc(var(--px)*4)}
+#dayBar{background:linear-gradient(90deg,#8fc7ff,#e8b04a);}
+.captain{top:calc(var(--px)*6);right:calc(var(--px)*6);width:calc(var(--px)*128)}
+.captain #capLine{margin:calc(var(--px)*4) 0;line-height:1.25}
+.orders{display:grid;gap:calc(var(--px)*2);margin:calc(var(--px)*3) 0}
+.orders button{text-align:left}
+.ship{left:calc(var(--px)*6);bottom:calc(var(--px)*6);width:calc(var(--px)*140)}
+.guns{margin-top:calc(var(--px)*5);gap:calc(var(--px)*5)}
+.gun{flex:1;display:grid;gap:calc(var(--px)*2)}
+.gun .bar>i{background:var(--ember)}
+.gun.ready .bar>i{background:var(--ok)}
+.shot{margin-top:calc(var(--px)*4);gap:calc(var(--px)*2)}
+.shot button{flex:1;padding-left:0;padding-right:0;text-align:center}
+.helm{left:50%;bottom:calc(var(--px)*6);transform:translateX(-50%);display:flex;gap:calc(var(--px)*6);align-items:center;padding-right:calc(var(--px)*7)}
+#rose{width:calc(var(--px)*64);height:calc(var(--px)*64);image-rendering:pixelated;display:block}
+.helmtext{display:grid;gap:calc(var(--px)*4);min-width:calc(var(--px)*92)}
+.helmtext .big{font-size:calc(var(--px)*20)}
+.target{right:calc(var(--px)*6);bottom:calc(var(--px)*30);width:calc(var(--px)*132)}
+.target .odds{margin-top:calc(var(--px)*5)}
+.target .odds .bar>i{background:linear-gradient(90deg,var(--red),var(--amber) 50%,var(--ok))}
+.target .odds .row{margin-bottom:calc(var(--px)*2);justify-content:space-between}
+.target #boardBtn{margin-top:calc(var(--px)*4)}
+.flag{display:inline-block;width:calc(var(--px)*10);height:calc(var(--px)*7);flex:none;box-shadow:0 0 0 var(--px) #0b0d14}
+.flag.jolly{background:radial-gradient(circle at 50% 45%,#ece4d0 0 28%,transparent 30%),#111013}
+.flag.stgeorge{background:linear-gradient(#b3241c,#b3241c) center/24% 100% no-repeat,linear-gradient(#b3241c,#b3241c) center/100% 28% no-repeat,#efe7d6}
+.flag.burgundy{background:linear-gradient(35deg,transparent 44%,#a4161a 44% 56%,transparent 56%),linear-gradient(-35deg,transparent 44%,#a4161a 44% 56%,transparent 56%),#efe7d6}
+.flag.fleur{background:radial-gradient(circle at 50% 50%,#c99a2e 0 22%,transparent 24%),#efe9da}
+.flag.prinsen{background:linear-gradient(#d8701e 0 33%,#efe9da 33% 66%,#1f3f7a 66%)}
+.flag.white{background:#ece6d6}
+.views{right:calc(var(--px)*6);bottom:calc(var(--px)*6);display:flex;gap:calc(var(--px)*2);align-items:center;padding:calc(var(--px)*3)}
+.views .sep{width:calc(var(--px)*3)}
+.skymenu{right:calc(var(--px)*6);bottom:calc(var(--px)*28);display:grid;grid-template-columns:repeat(3,auto);gap:calc(var(--px)*2);padding:calc(var(--px)*3)}
+/* centre messages */
+.banner{position:absolute;left:50%;top:calc(var(--px)*32);transform:translateX(-50%);text-align:center;pointer-events:none;text-shadow:var(--px) var(--px) 0 #000,0 0 calc(var(--px)*6) rgba(0,0,0,.6);opacity:0;transition:opacity .25s}
+.banner.on{opacity:1}
+.banner .t{font-size:calc(var(--px)*20);color:var(--amber)}
+.banner .s{margin-top:calc(var(--px)*4)}
+.log{position:absolute;left:calc(var(--px)*6);top:calc(var(--px)*26);margin:0;padding:0;list-style:none;display:grid;gap:calc(var(--px)*3);pointer-events:none;max-width:calc(var(--px)*170)}
+.log li{text-shadow:var(--px) var(--px) 0 #000;line-height:1.2;transition:opacity 1s}
+.log li.good{color:var(--ok)} .log li.bad{color:var(--ember)} .log li.warn{color:var(--amber)}
+.caption{position:absolute;left:50%;bottom:calc(var(--px)*88);transform:translateX(-50%);text-align:center;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:calc(var(--px)*11);color:#f4ead2;text-shadow:0 0 calc(var(--px)*4) #000,var(--px) var(--px) 0 #000;pointer-events:none;-webkit-font-smoothing:antialiased;white-space:nowrap}
+.attract{left:50%;bottom:calc(var(--px)*86);transform:translateX(-50%);text-align:center;color:var(--amber);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:inset 0 0 0 var(--px) var(--edge-hi)}}
+.paused{left:50%;top:calc(var(--px)*30);transform:translateX(-50%);color:var(--amber)}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(calc(var(--px)*190),calc(100% - 24px));padding:calc(var(--px)*8)}
+.modal.help{width:min(calc(var(--px)*250),calc(100% - 24px))}
+.modal h2{margin:0 0 calc(var(--px)*5);font-size:calc(var(--px)*16);color:var(--amber)}
+.modal .fell{font-size:calc(var(--px)*13)}
+.modal .grid{display:grid;grid-template-columns:1fr auto;gap:calc(var(--px)*3) calc(var(--px)*8);margin:calc(var(--px)*5) 0}
+.modal .acts{display:grid;gap:calc(var(--px)*3);margin-top:calc(var(--px)*6)}
+.help dl{display:grid;grid-template-columns:auto 1fr;gap:calc(var(--px)*4) calc(var(--px)*8);margin:0}
+.help dt{color:var(--amber)} .help dd{margin:0}
+/* chart labels and ship marks */
+#marks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.isl{position:absolute;transform:translate(-50%,-50%);font-family:"IM Fell English SC",Georgia,serif;font-size:calc(var(--px)*10);color:#f3e2b8;text-shadow:0 0 calc(var(--px)*3) #000,0 0 var(--px) #000;white-space:nowrap;-webkit-font-smoothing:antialiased}
+.isl.port{color:var(--amber)}
+.mk{position:absolute;width:0;height:0;transform:translate(-50%,-50%)}
+.mk i{position:absolute;left:calc(var(--px)*-4);top:calc(var(--px)*-4);width:calc(var(--px)*8);height:calc(var(--px)*8);clip-path:polygon(50% 0,100% 100%,50% 75%,0 100%)}
+.mk span{position:absolute;left:calc(var(--px)*7);top:calc(var(--px)*-4);white-space:nowrap;text-shadow:var(--px) var(--px) 0 #000;color:var(--tx)}
+.mk.player i{background:var(--amber)} .mk.merchant i{background:#e9dfc8} .mk.navy i{background:var(--cold)} .mk.pirate i{background:var(--ember)} .mk.struck i{background:#8a8170}
+.sel-ring{position:absolute;border:var(--px) solid var(--amber);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
+/* port screen */
+.port{position:absolute;inset:0;pointer-events:none}
+.portnav{left:calc(var(--px)*6);top:calc(var(--px)*30);width:calc(var(--px)*120)}
+.portnav h1{margin:0;font-size:calc(var(--px)*17);color:#f4e4bd;line-height:1.05}
+.portnav .sub{margin:calc(var(--px)*3) 0 calc(var(--px)*6);color:var(--dim);line-height:1.3}
+.portnav nav{display:grid;gap:calc(var(--px)*2)}
+.portnav nav button{text-align:left;display:flex;align-items:center;gap:calc(var(--px)*4)}
+.portnav nav button .ico{width:calc(var(--px)*8);height:calc(var(--px)*8)}
+.portbody{left:calc(var(--px)*132);top:calc(var(--px)*30);width:min(calc(var(--px)*300),calc(100% - var(--px)*140));max-height:calc(100% - var(--px)*64);overflow:auto}
+.portbody h2{margin:0 0 calc(var(--px)*2);font-size:calc(var(--px)*15);color:#f4e4bd}
+.portbody .lede{color:var(--dim);line-height:1.3;margin:calc(var(--px)*3) 0 calc(var(--px)*6)}
+.portbody p{line-height:1.35;margin:calc(var(--px)*4) 0}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{color:var(--dim);font-weight:400;text-align:right;padding:calc(var(--px)*2) calc(var(--px)*3);white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td{text-align:right;padding:calc(var(--px)*2) calc(var(--px)*3);white-space:nowrap}
+.tbl tr+tr td{box-shadow:inset 0 var(--px) 0 rgba(107,82,54,.35)}
+.tbl button{min-height:calc(var(--px)*13);padding:calc(var(--px)*2) calc(var(--px)*3)}
+.tbl tr.you td{color:var(--amber)}
+.tbl .l{text-align:left}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--px)*100),1fr));gap:calc(var(--px)*4);margin-top:calc(var(--px)*4)}
+.card{background:var(--ink2);padding:calc(var(--px)*4);box-shadow:inset 0 0 0 var(--px) #3d3122;display:grid;gap:calc(var(--px)*3)}
+.card .fell{font-size:calc(var(--px)*12);color:#f4e4bd}
+.kv{display:grid;grid-template-columns:1fr auto;gap:calc(var(--px)*2) calc(var(--px)*6)}
+.summary{display:flex;gap:calc(var(--px)*8);margin-bottom:calc(var(--px)*5);flex-wrap:wrap}
+.rumour{padding-left:calc(var(--px)*6);position:relative;line-height:1.35;margin:calc(var(--px)*4) 0}
+.rumour::before{content:"";position:absolute;left:0;top:calc(var(--px)*3);width:calc(var(--px)*3);height:calc(var(--px)*3);background:var(--amber)}
+#flashScreen{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+@media (max-width:1100px){.log{display:none}.caption{bottom:calc(var(--px)*100)}}
+@media (max-width:820px){:root{--px:2px}.purse{gap:calc(var(--px)*4)}.topc{display:none}.captain{width:calc(var(--px)*104)}.target{bottom:calc(var(--px)*60)}.portbody{left:calc(var(--px)*6);top:calc(var(--px)*150)}}
+@media (prefers-reduced-motion:reduce){.attract{animation:none}.banner,.log li{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Black Tide: a 3D Caribbean sea with your ship" tabindex="0"></canvas>
+<div id="ui">
+  <div id="marks" aria-hidden="true"></div>
+
+  <div class="plate purse" id="purse" aria-label="Purse">
+    <span class="stat" title="Gold"><i class="ico" data-i="coin"></i><b id="gold">0</b></span>
+    <span class="stat" title="Cargo in the hold"><i class="ico" data-i="crate"></i><b id="hold">0/0</b></span>
+    <span class="stat" title="Ladder of Famous Captains"><i class="ico" data-i="skull"></i><b id="rank">Unranked</b></span>
+  </div>
+
+  <div class="plate topc" id="topc">
+    <div class="row"><i class="ico" data-i="sun" id="todIco"></i><b id="tod">Dusk</b><span class="dim">·</span><span class="dim" id="where"></span></div>
+    <div class="bar thin" aria-hidden="true"><i id="dayBar"></i></div>
+  </div>
+  <div class="banner" id="banner" aria-live="polite"><div class="t" id="bannerT"></div><div class="s" id="bannerS"></div></div>
+  <ol class="log" id="log" aria-live="polite"></ol>
+
+  <div class="plate captain hi" id="captain">
+    <div class="row"><i class="ico" data-i="helm"></i><b id="capTitle">AI captain</b></div>
+    <div id="capLine" class="amber">Looking for a prize</div>
+    <div class="orders" id="orders" hidden>
+      <span class="dim">Hand the helm to the AI captain:</span>
+      <button data-order="hunt">Hunt nearby prizes</button>
+      <button data-order="port">Sail to Port Rosalind</button>
+      <button disabled title="Needs a second port (milestone 6)">Trade run · later</button>
+    </div>
+    <button id="helmBtn" class="btn go">Take the helm</button>
+  </div>
+
+  <div class="plate ship" id="shipPanel">
+    <div class="row"><b id="shipName" class="amber">Black Tide</b><span class="dim" id="shipCls">Brigantine</span></div>
+    <div class="meter"><span>Hull</span><div class="bar"><i id="hullBar"></i></div><b id="hullN">0</b></div>
+    <div class="meter"><span>Sails</span><div class="bar"><i id="sailBar"></i></div><b id="sailN">0</b></div>
+    <div class="meter"><span>Crew</span><div class="bar"><i id="crewBar"></i></div><b id="crewN">0</b></div>
+    <div class="row guns">
+      <div class="gun" id="gunP"><span><kbd>Q</kbd> Port</span><div class="bar"><i></i></div></div>
+      <div class="gun" id="gunS"><span><kbd>E</kbd> Starboard</span><div class="bar"><i></i></div></div>
+    </div>
+    <div class="row shot" role="group" aria-label="Shot type, R to cycle">
+      <button data-shot="round" title="Round shot: hull">Round</button><button data-shot="chain" title="Chain shot: sails, slows them">Chain</button><button data-shot="grape" title="Grape shot: crew, sets up boarding">Grape</button>
+    </div>
+  </div>
+
+  <div class="plate helm" id="helm">
+    <canvas id="rose" width="64" height="64" aria-label="Compass: heading and wind"></canvas>
+    <div class="helmtext">
+      <div><b id="speed" class="big">0.0</b> kn</div>
+      <div id="sailSet" class="dim">Full sail</div>
+      <div id="pos">Broad reach</div>
+      <div id="wind" class="cold">Wind N</div>
+    </div>
+  </div>
+  <div class="caption" id="caption" aria-hidden="true"></div>
+  <div class="plate attract" id="attract">AI captain is sailing · click or press any key to take the helm</div>
+  <div class="plate paused" id="paused" hidden>Paused · click the sea to plan a course · <kbd>Space</kbd> to resume</div>
+
+  <div class="plate target" id="target" hidden>
+    <div class="row"><i class="flag" id="tFlag"></i><b id="tName" class="amber"></b></div>
+    <div class="dim" id="tCls" style="margin-top:calc(var(--px)*3)"></div>
+    <div class="meter"><span>Hull</span><div class="bar"><i id="tHull"></i></div><b id="tHullN"></b></div>
+    <div class="meter"><span>Sails</span><div class="bar"><i id="tSails"></i></div><b id="tSailsN"></b></div>
+    <div class="meter"><span>Crew</span><div class="bar"><i id="tCrew"></i></div><b id="tCrewN"></b></div>
+    <div class="row" style="margin-top:calc(var(--px)*5);justify-content:space-between"><span><span class="dim">Range</span> <b id="tRange"></b></span><span id="tState" class="amber"></span></div>
+    <div class="odds"><div class="row"><span class="dim">Boarding odds</span><b id="oddsN"></b></div><div class="bar"><i id="oddsBar"></i></div></div>
+    <button id="boardBtn" class="btn" disabled><kbd>B</kbd> Board her</button>
+  </div>
+
+  <div class="plate views" id="views" role="group" aria-label="Camera and settings">
+    <button data-view="deck" title="Deck: at the helm"><kbd>1</kbd> Deck</button><button data-view="chase" title="Chase: above and behind"><kbd>2</kbd> Chase</button><button data-view="chart" title="Chart: plan long voyages"><kbd>3</kbd> Chart</button>
+    <span class="sep"></span>
+    <button id="pauseBtn" title="Pause and plan (Space)">Pause</button>
+    <button id="skyBtn" title="Time of day and weather" aria-expanded="false">Sky</button>
+    <button id="soundBtn" title="Sound (M)">Sound</button>
+    <button id="helpBtn" title="Controls (?)">?</button>
+  </div>
+  <div class="plate skymenu" id="skymenu" hidden role="group" aria-label="Sky">
+    <button data-sky="day">Day</button><button data-sky="dusk">Dusk</button><button data-sky="night">Night</button>
+    <button data-wx="0">Clear</button><button data-wx="0.5">Squall</button><button data-wx="1">Storm</button>
+  </div>
+
+  <div class="plate modal" id="loot" hidden role="dialog" aria-labelledby="lootH">
+    <h2 id="lootH">Prize taken</h2>
+    <div class="fell" id="lootShip"></div>
+    <div class="grid" id="lootGrid"></div>
+    <div class="acts">
+      <button class="btn go" data-loot="cargo">Take the cargo</button>
+      <button class="btn" data-loot="ship" id="lootShipBtn">Take her as your flagship</button>
+      <button class="btn" data-loot="free">Let her go</button>
+    </div>
+  </div>
+
+  <div class="plate modal help" id="help" hidden role="dialog" aria-labelledby="helpH">
+    <h2 id="helpH">At the helm</h2>
+    <dl>
+      <dt>A / D</dt><dd>Rudder left and right</dd>
+      <dt>W / S</dt><dd>Raise or lower sail: stop, half, full</dd>
+      <dt>Click the sea</dt><dd>Set a course. Any WASD key takes it back</dd>
+      <dt>Q / E</dt><dd>Fire the port or starboard broadside</dd>
+      <dt>R</dt><dd>Shot: round (hull), chain (sails), grape (crew)</dd>
+      <dt>B</dt><dd>Board a slowed or struck ship alongside</dd>
+      <dt>F</dt><dd>Enter port when you are in the harbour</dd>
+      <dt>Space</dt><dd>Pause and plan</dd>
+      <dt>1 2 3 · wheel</dt><dd>Deck, chase and chart cameras; the wheel zooms between chase and chart; right-drag turns the view</dd>
+      <dt>H</dt><dd>Hand the helm to the AI captain, or take it back</dd>
+      <dt>M · L</dt><dd>Sound on or off · shanty captions</dd>
+    </dl>
+    <div class="acts"><button class="btn go" id="helpClose">Back to sea</button></div>
+  </div>
+
+  <div class="port" id="port" hidden>
+    <div class="plate portnav hi">
+      <h1 class="fell">Port Rosalind</h1>
+      <div class="sub">English colony on Isla Rosalind · Governor Ashby</div>
+      <nav aria-label="Port">
+        <button data-port="menu"><i class="ico" data-i="anchor"></i>Harbour</button>
+        <button data-port="governor"><i class="ico" data-i="crown"></i>Governor</button>
+        <button data-port="market"><i class="ico" data-i="crate"></i>Market</button>
+        <button data-port="shipwright"><i class="ico" data-i="hammer"></i>Shipwright</button>
+        <button data-port="tavern"><i class="ico" data-i="mug"></i>Tavern</button>
+        <button data-port="board"><i class="ico" data-i="skull"></i>Harbour board</button>
+        <button data-port="leave" class="go"><i class="ico" data-i="helm"></i>Set sail</button>
+      </nav>
+    </div>
+    <div class="plate portbody" id="portBody" aria-live="polite"></div>
+  </div>
+  <div id="flashScreen"></div>
+</div>
+<script>__BUNDLE__</script>
+</body>
+</html>
