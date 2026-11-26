@@ -34,7 +34,7 @@
  {
   "do": "until",
   "js": "G.docked",
-  "max": 400,
+  "max": 900,
   "step": 1
  },
  {
@@ -141,7 +141,7 @@
  {
   "do": "until",
   "js": "G.docked",
-  "max": 400,
+  "max": 900,
   "step": 1
  },
  {

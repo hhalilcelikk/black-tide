@@ -1,0 +1,23 @@
+[
+ {"do": "eval", "js": "window.G = window.__bt.G; window.P = () => G.player; G.ships.filter(s => s.role === 'merchant').map(s => Math.round(Math.hypot(s.x - P().x, s.z - P().z))).sort((a, b) => a - b)[0]"},
+ {"do": "expect", "js": "G.ships.some(s => s.role === 'merchant' && Math.hypot(s.x - P().x, s.z - P().z) < 500)", "msg": "a new career starts with a prize in sight"},
+ {"do": "eval", "js": "(() => { const p = P(); p.psi = G.wind.from; p.path = null; G.course = null; p.sailSet = 1; window.x0 = [p.x, p.z]; return [+p.psi.toFixed(2), +G.wind.from.toFixed(2)]; })()"},
+ {"do": "advance", "sec": 12, "print": false},
+ {"do": "expect", "js": "(() => { const p = P(), off = Math.abs(Math.atan2(Math.sin(p.psi - G.wind.from), Math.cos(p.psi - G.wind.from))); return G.speedKn(p) > 2.5 && off < 0.35 && Math.hypot(p.x - x0[0], p.z - x0[1]) > 30; })()", "msg": "head to wind she still makes way (over 2.5 kn) and holds her heading"},
+ {"do": "eval", "js": "({ kn: +G.speedKn(P()).toFixed(1), moved: Math.round(Math.hypot(P().x - x0[0], P().z - x0[1])) })"},
+ {"do": "eval", "js": "(() => { const p = P(); p.psi = G.wind.from + 1.6; for (const s of [...G.ships]) if (s !== p) G.remove(s); const sx = p.x + Math.sin(p.psi) * 85, sz = p.z + Math.cos(p.psi) * 85; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: sx, z: sz, psi: p.psi, v: p.v, gold: 400, cargo: { spices: 10 } }); m.path = [[sx + Math.cos(p.psi) * 900, sz - Math.sin(p.psi) * 900]]; m.wp = 0; G.selected = m; window.M = m; window.h0 = m.hull; window.t0 = G.t; G.placeAll(); return G.sideTo(p, m); })()"},
+ {"do": "key", "key": "e"},
+ {"do": "advance", "sec": 2, "print": false},
+ {"do": "expect", "js": "M.hull < h0 && (P().hits || 0) >= 2", "msg": "one starboard broadside at a merchant abeam hits her"},
+ {"do": "until", "js": "M.state === 'struck' || (G.fire(P(), G.sideTo(P(), M)), false)", "max": 40, "step": 0.5},
+ {"do": "expect", "js": "M.state === 'struck' && G.t - t0 < 30", "msg": "she strikes her colours within half a minute"},
+ {"do": "eval", "js": "({ seconds: Math.round(G.t - t0), hits: P().hits, hull: Math.round(M.hull) + '/' + M.maxHull })"},
+ {"do": "eval", "js": "(() => { const p = P(); M.x = p.x + Math.sin(p.psi) * 18; M.z = p.z + Math.cos(p.psi) * 18; M.v = p.v; G.placeAll(); return G.canBoard(p, M); })()"},
+ {"do": "key", "key": "b"},
+ {"do": "advance", "sec": 3, "print": false},
+ {"do": "expect", "js": "!!G.loot && G.loot.ship === M", "msg": "B boards her, and the prize is yours in under three seconds"},
+ {"do": "shot", "out": "shots/combat-prize.png"},
+ {"do": "eval", "js": "G.takeLoot('cargo'), (() => { for (const s of [...G.ships]) if (s !== P()) G.remove(s); return G.ships.length; })()"},
+ {"do": "until", "js": "G.ships.some(s => s.role === 'merchant' && !s.looted && Math.hypot(s.x - P().x, s.z - P().z) < 500)", "max": 40, "step": 1},
+ {"do": "expect", "js": "G.ships.some(s => s.role === 'merchant' && !s.looted && Math.hypot(s.x - P().x, s.z - P().z) < 500)", "msg": "when the sea goes quiet, a new prize sails across your bow within half a minute"}
+]

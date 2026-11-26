@@ -57,7 +57,7 @@ export function createSerpent({ scene, U, fx, G, api, seed }) {
       if (Sp.known && inZone(P) && !G.attract && G.weatherTarget < 1) { G.weatherTarget = 1; G.nextWeather = 240; api.say('The sky over the water ' + SERPENT_ZONE.name + ' turns black.', 'warn'); }
       check -= dt; if (check > 0) return; check = 4;
       const storm = G.weather > 0.55;
-      if (!G.attract && storm && P.state !== 'docked' && farFromPorts(P) && (inZone(P) || srnd() < 0.06)) {
+      if (!G.attract && storm && P.state !== 'docked' && farFromPorts(P) && (inZone(P) || srnd() < 0.01)) { // out of its own water it is rare: about once in seven minutes of storm
         Sp.hp = HP; rise(P, srnd() * Math.PI * 2);
         api.say('Something vast moves under the water…', 'warn'); api.flash('A sea serpent!', 'Broadsides to its back will wound it', 5); api.emit('serpent', Sp);
       }

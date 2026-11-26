@@ -84,17 +84,17 @@
  },
  {
   "do": "eval",
-  "js": "(() => { const p = G.player; const e = G.spawn({ cls: 'frigate', nation: 'pirate', role: 'pirate', name: 'Night Heron', x: p.x + Math.cos(p.psi) * 170, z: p.z - Math.sin(p.psi) * 170, psi: p.psi + Math.PI, v: 3 }); e.path = null; window.ENEMY = e.id; for (const s of G.consorts()) s.shotsFired = 0, s.hits = 0; return e.C.guns; })()"
+  "js": "(() => { const p = G.player; const e = G.spawn({ cls: 'brigantine', nation: 'pirate', role: 'pirate', name: 'Night Heron', x: p.x + Math.cos(p.psi) * 170, z: p.z - Math.sin(p.psi) * 170, psi: p.psi + Math.PI, v: 3 }); e.path = null; window.ENEMY = e.id; for (const s of G.consorts()) s.shotsFired = 0, s.hits = 0; return e.C.guns; })()"
  },
  {
   "do": "advance",
-  "sec": 50,
+  "sec": 30,
   "print": false
  },
  {
   "do": "expect",
   "js": "(() => { const e = G.ships.find(s => s.id === ENEMY); return G.consorts().every(s => s.shotsFired > 0) && G.consorts().reduce((a, s) => a + (s.hits || 0), 0) > 0; })()",
-  "msg": "when a pirate frigate attacks, both consorts fire their own broadsides and hit her"
+  "msg": "when a pirate brigantine attacks, both consorts fire their own broadsides and hit her"
  },
  {
   "do": "eval",
@@ -106,7 +106,7 @@
  },
  {
   "do": "eval",
-  "js": "(() => { const e = G.ships.find(s => s.id === ENEMY); if (e) G.remove(e); const p = G.player; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: p.x - Math.sin(p.psi) * 70, z: p.z - Math.cos(p.psi) * 70, psi: p.psi, v: p.v }); m.path = null; G.selected = m; window.TGT = m.id; p.reload['-1'] = 0; p.reload['1'] = 0; return m.name; })()"
+  "js": "(() => { for (const x of [...G.ships]) if (!G.isFleet(x)) G.remove(x); G.ladder.rivals.forEach(r => r.beatenT = G.t); /* isolate the check: empty sea, rivals held on the chart */ const p = G.player; const m = G.spawn({ cls: 'fluyt', nation: 'dutch', role: 'merchant', name: 'Eendracht', x: p.x - Math.sin(p.psi) * 70, z: p.z - Math.cos(p.psi) * 70, psi: p.psi, v: p.v }); m.path = null; G.selected = m; window.TGT = m.id; p.reload['-1'] = 0; p.reload['1'] = 0; return m.name; })()"
  },
  {
   "do": "key",

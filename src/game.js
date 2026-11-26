@@ -5,6 +5,7 @@ import { buildShip, CLASSES, TYPES, LIVERIES, NATIONS } from './ship.js';
 import { waveHeight } from './waves.js';
 import { groundAt, route, clearLine, isWater } from './nav.js';
 import { mulberry32 } from './util.js';
+import { lookAt } from './looks.js';
 import { PORTS, PORT_BY_ID, nearestPort } from './ports.js';
 import { createSerpent, SERPENT_ZONE } from './serpent.js';
 import { createLadder, STYLES as RIVAL_STYLES, titleFor } from './ladder.js';
@@ -21,7 +22,7 @@ export const GOODS = [
   { id: 'sugar', name: 'Sugar', base: 20 }, { id: 'rum', name: 'Rum', base: 26 }, { id: 'tobacco', name: 'Tobacco', base: 30 }, { id: 'cloth', name: 'Cloth', base: 34 },
   { id: 'spices', name: 'Spices', base: 62 }, { id: 'timber', name: 'Timber', base: 12 }, { id: 'powder', name: 'Powder', base: 40 }, { id: 'silver', name: 'Silver', base: 95 },
 ];
-export const SHOTS = { round: { name: 'Round shot', range: 190, speed: 92, hull: 2.8, sails: 0.4, crew: 0.45 }, chain: { name: 'Chain shot', range: 140, speed: 84, hull: 0.4, sails: 5.2, crew: 0.2 }, grape: { name: 'Grape shot', range: 95, speed: 74, hull: 0.12, sails: 0.3, crew: 1.3 } };
+export const SHOTS = { round: { name: 'Round shot', range: 200, speed: 130, hull: 5.2, sails: 0.7, crew: 0.8 }, chain: { name: 'Chain shot', range: 160, speed: 120, hull: 0.7, sails: 6, crew: 0.35 }, grape: { name: 'Grape shot', range: 110, speed: 110, hull: 0.25, sails: 0.5, crew: 2.4 } };
 const GUNW = { sloop: 0.8, schooner: 0.85, brigantine: 1, fluyt: 0.9, frigate: 1.1, galleon: 1.1, manowar: 1.3 };
 
 // chart labels: islands, and every port at its town (port: the port's id)
@@ -42,12 +43,13 @@ const NAMES = {
   pirate: ['Revenge', 'Black Gull', 'Merry Widow', 'Sea Wolf', 'Night Heron', 'Rook', 'Bloody Mary', 'Gallows Bird'],
 };
 
+// speed as a fraction of a ship's best, by angle off the wind. An arcade polar: even head to wind a ship
+// keeps a third of her speed (no dead zone, no stalling), close-hauled is still brisk, a broad reach is best.
 export function polar(off, C) {
   const p = C.point * D2R, b = C.best * D2R;
-  if (off < p - 0.17) return 0.05;
-  if (off < p) return 0.05 + 0.4 * (off - (p - 0.17)) / 0.17;
-  if (off < b) { const t = (off - p) / (b - p); return 0.45 + 0.55 * (1 - (1 - t) * (1 - t)); }
-  const t = (off - b) / (Math.PI - b); return 1 - 0.22 * t * t;
+  if (off < p) return 0.38 + 0.27 * Math.pow(off / p, 1.5);
+  if (off < b) { const t = (off - p) / (b - p); return 0.65 + 0.35 * (1 - (1 - t) * (1 - t)); }
+  const t = (off - b) / (Math.PI - b); return 1 - 0.12 * t * t;
 }
 export function pointOfSail(off) {
   const d = off / D2R;
@@ -62,7 +64,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   const emit = (ev, data) => { for (const f of listeners[ev] || []) f(data); };
 
   const G = {
-    seed, slot: null, t: 0, phase: 0.6, daySpeed: 1 / 720, weather: 0, weatherTarget: 0, nextWeather: 300, paused: false, timeScale: 1,
+    seed, slot: null, waveAmp: 1, t: 0, phase: 0.6, daySpeed: 1 / 720, weather: 0, weatherTarget: 0, nextWeather: 300, paused: false, timeScale: 1,
     wind: { from: Math.PI / 2, speed: 1.0, gust: 0 }, windBase: Math.PI / 2,
     ships: [], balls: [], player: null, selected: null, log: [], banner: null,
     gold: 350, cargo: Object.fromEntries(GOODS.map(g => [g.id, 0])), fame: 0, prizes: 0, rank: null,
@@ -137,7 +139,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   };
   G.hostile = hostile;
   G.speedKn = s => s.v / KN;
-  G.reloadTime = s => 6.2 / Math.min(1, Math.max(0.35, 0.3 + 0.8 * s.crew / s.maxCrew)) * (isFleet(s) ? 1 / (1 + 0.1 * s.up.guns) : s.role === 'merchant' ? 1.5 : 1);
+  G.reloadTime = s => 3.2 / Math.min(1, Math.max(0.35, 0.3 + 0.8 * s.crew / s.maxCrew)) * (isFleet(s) ? 1 / (1 + 0.1 * s.up.guns) : s.role === 'merchant' ? 1.5 : 1);
 
   // ---------------- wind and weather ----------------
   function stepWind(dt) {
@@ -156,16 +158,20 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   // ---------------- physics ----------------
   const Yax = new THREE.Vector3(0, 1, 0), Zax = new THREE.Vector3(0, 0, 1), Xax = new THREE.Vector3(1, 0, 0);
   const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
-  function place(s) {
+  // sim: true from the simulation step, which owns s.y (cannonballs test hits against it) and uses the
+  // sim's own wave amplitude. The renderer only moves the meshes, with whatever amplitude it is showing,
+  // so how often frames are drawn can never change the game.
+  function place(s, sim = false) {
     // below half her canvas a ship's sails show the holes
     s.mesh.setTorn(s.sails < s.maxSails * 0.6 ? Math.min(1, (0.6 - s.sails / s.maxSails) / 0.5) : 0);
-    const L = s.T.L, B = s.T.B, amp = U.uWaveAmp.value, t = G.t, x = s.x, z = s.z, psi = s.psi;
+    const L = s.T.L, B = s.T.B, amp = sim ? G.waveAmp : U.uWaveAmp.value, t = G.t, x = s.x, z = s.z, psi = s.psi;
     const fx_ = Math.cos(psi), fz = -Math.sin(psi), rx = Math.sin(psi), rz = Math.cos(psi);
     const hb = waveHeight(x + fx_ * L * 0.4, z + fz * L * 0.4, t, amp), hs = waveHeight(x - fx_ * L * 0.4, z - fz * L * 0.4, t, amp);
     const hp = waveHeight(x - rx * B * 0.45, z - rz * B * 0.45, t, amp), hst = waveHeight(x + rx * B * 0.45, z + rz * B * 0.45, t, amp);
-    s.y = (hb + hs + hp + hst) * 0.25 * 0.85;
+    const sy = (hb + hs + hp + hst) * 0.25 * 0.85;
+    if (sim) s.y = sy;
     let pitch = Math.atan2(hb - hs, L * 0.8) * 0.75, roll = Math.atan2(hp - hst, B * 0.9) * 0.6 + s.heel;
-    let y = s.y;
+    let y = sy;
     if (s.state === 'sinking') { const k = Math.min(1, s.sinkT / 11); y -= k * k * (s.T.T + s.T.dMain + 6); roll += k * 0.55 * (s.id.charCodeAt(1) % 2 ? 1 : -1); pitch += k * 0.32; }
     s.mesh.group.position.set(x, y, z);
     _q1.setFromAxisAngle(Yax, psi); _q2.setFromAxisAngle(Zax, pitch); _q3.setFromAxisAngle(Xax, roll);
@@ -183,13 +189,13 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     let target = C.knots * KN * up * polar(off, C) * s.sailAmt * Math.min(1.35, w.speed) * (0.3 + 0.7 * s.sails / s.maxSails);
     if (s.state === 'struck' || s.state === 'sinking' || s.state === 'docked') target = 0;
     if (s.state === 'boarding') target = Math.min(target, 0.6);
-    const tau = 3 + C.hull / 70;
+    const tau = 1.6 + C.hull / 140; // she gathers way quickly
     s.v += (target - s.v) * (1 - Math.exp(-dt / tau));
-    const rate = 0.3 * C.turn * Math.min(1, Math.max(s.tacking ? 0.6 : 0, 0.28 + s.v / 3.2)); // a ship in stays swings through on her headsails
+    const rate = 0.42 * C.turn * Math.min(1, 0.55 + s.v / 4); // she answers the helm even when slow
     if (s.state !== 'docked' && s.state !== 'sinking') {
       s.psi = wrap(s.psi - s.rudder * rate * dt);
       // in irons the bows pay off on their own
-      if (!s.tacking && !s.towed && off < (C.point - 4) * D2R && s.v < 2.2 && s.sailAmt > 0.2) s.psi = wrap(s.psi + (Math.sign(wrap(s.psi - w.from)) || 1) * 0.09 * dt);
+      if (false && !s.tacking && !s.towed && off < (C.point - 4) * D2R && s.v < 2.2 && s.sailAmt > 0.2) s.psi = wrap(s.psi + (Math.sign(wrap(s.psi - w.from)) || 1) * 0.09 * dt);
     }
     const side = Math.sign(wrap(w.from - s.psi)) || 1;
     const heelT = side * 0.09 * s.sailAmt * Math.sin(off) * Math.min(1.3, w.speed) * (s.state === 'sail' || s.state === 'engage' || s.state === 'flee' ? 1 : 0.3);
@@ -235,9 +241,11 @@ export function createGame({ scene, U, fx, seed = 7 }) {
 
   // ---------------- combat ----------------
   const _v = new THREE.Vector3(), _o = new THREE.Vector3();
+  // a broadside bears on anything within 45 degrees of the beam; the guns are trained onto it
+  const ARC = 0.8;
   function inArc(s, o, side) {
     const r = wrap(headingTo(o.x - s.x, o.z - s.z) - s.psi);
-    return Math.abs(Math.abs(r) - Math.PI / 2) < 0.36 && Math.sign(r) === -side;
+    return Math.abs(Math.abs(r) - Math.PI / 2) < ARC && Math.sign(r) === -side;
   }
   G.inArc = inArc;
   function sideTo(s, o) { const r = wrap(headingTo(o.x - s.x, o.z - s.z) - s.psi); return r > 0 ? -1 : 1; }
@@ -251,20 +259,22 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const guns = side > 0 ? s.mesh.guns.star : s.mesh.guns.port;
     let d = 150;
     if (aimAt) d = Math.hypot(aimAt.x - s.x, aimAt.z - s.z);
+    else if (s.role === 'player' && G.selected && G.selected.alive && inArc(s, G.selected, side)) d = Math.hypot(G.selected.x - s.x, G.selected.z - s.z);
     else { // aim at the nearest hostile on that side, if any
       let bd = 1e9; for (const o of G.ships) if (o !== s && o.alive && o.state !== 'sinking' && hostile(s, o) && inArc(s, o, side)) { const dd = Math.hypot(o.x - s.x, o.z - s.z); if (dd < bd) { bd = dd; d = dd; } }
     }
     d = Math.min(Math.max(d, 25), shot.range);
     const v0 = shot.speed;
     let train = 0, lift = s.shot === 'chain' ? 0.03 : 0;
-    const tgt = aimAt || G.ships.find(o => o !== s && o.alive && o.state !== 'sinking' && hostile(s, o) && inArc(s, o, side) && Math.hypot(o.x - s.x, o.z - s.z) < shot.range);
+    const sel = s.role === 'player' && G.selected && G.selected.alive && G.selected.state !== 'sinking' && inArc(s, G.selected, side) ? G.selected : null;
+    const tgt = aimAt || sel || G.ships.filter(o => o !== s && o.alive && o.state !== 'sinking' && hostile(s, o) && inArc(s, o, side) && Math.hypot(o.x - s.x, o.z - s.z) < shot.range * 1.1).sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
     if (tgt) {
       // lead the target, then train the guns up to 12 degrees toward it
       const tf = Math.hypot(tgt.x - s.x, tgt.z - s.z) / v0;
       const px = tgt.x + Math.cos(tgt.psi) * tgt.v * tf - Math.cos(s.psi) * s.v * tf, pz = tgt.z - Math.sin(tgt.psi) * tgt.v * tf + Math.sin(s.psi) * s.v * tf;
       d = Math.min(Math.max(Math.hypot(px - s.x, pz - s.z), 25), shot.range);
       const beam = wrap(s.psi - side * Math.PI / 2);
-      train = Math.max(-0.3, Math.min(0.3, wrap(headingTo(px - s.x, pz - s.z) - beam)));
+      train = Math.max(-ARC, Math.min(ARC, wrap(headingTo(px - s.x, pz - s.z) - beam)));
     }
     const el = 0.5 * Math.asin(Math.min(1, 9.8 * d / (v0 * v0))) + lift;
     const out = _o.set(0, 0, side).applyQuaternion(s.mesh.group.quaternion); out.y = 0; out.normalize();
@@ -290,7 +300,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   function damage(s, shot, by, px, py, pz, part) {
     const w = (GUNW[by.cls] || 1) * (by.role === 'merchant' ? 0.55 : 1), S = SHOTS[shot]; // merchant crews are poor gunners
     const shield = isFleet(s) ? 1 / (1 + 0.1 * s.up.hull) : 1;
-    if (part === 'rig') { s.sails -= shot === 'chain' ? 5.2 * w : S.sails * 2 * w; s.crew -= shot === 'grape' ? S.crew * w : 0; s.hull -= S.hull * w * 0.2; }
+    if (part === 'rig') { s.sails -= shot === 'chain' ? S.sails * w : S.sails * 2 * w; s.crew -= shot === 'grape' ? S.crew * w : 0; s.hull -= S.hull * w * 0.2; }
     else { s.hull -= S.hull * w * shield; s.sails -= S.sails * w * 0.5; s.crew -= S.crew * w * (0.6 + rnd() * 0.8); }
     s.sails = Math.max(0, s.sails); s.crew = Math.max(0, s.crew);
     s.hitT = G.t;
@@ -360,7 +370,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     }
     if (isFleet(s) || s.role === 'lost' || s.state === 'struck' || s.state === 'boarding') return;
     const h = s.hull / s.maxHull, c = s.crew / s.maxCrew, sl = s.sails / s.maxSails;
-    const lim = s.role === 'merchant' ? [0.55, 0.55, 0.35] : s.role === 'pirate' ? [0.32, 0.32, 0.1] : [0.24, 0.26, 0.08];
+    const lim = s.role === 'merchant' ? [0.6, 0.5, 0.35] : s.role === 'pirate' ? [0.4, 0.4, 0.15] : [0.3, 0.32, 0.12];
     if (G.t - s.threatT < 40 && (h < lim[0] || c < lim[1] || sl < lim[2])) {
       s.state = 'struck'; s.sailSet = 0; s.struckT = G.t; s.mesh.setFlag('white'); s.flagKind = 'white';
       if (isFleet(s.threat) && s.rival) ladder.beat(s.rival, 'strikes to you');
@@ -474,7 +484,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
   G.canBoard = (a, b) => {
     if (!b || !b.alive || b.state === 'sinking' || b.state === 'docked' || G.boarding) return false;
     const d = Math.hypot(b.x - a.x, b.z - a.z);
-    return d < (a.T.L + b.T.L) * 0.5 + 6 && (b.state === 'struck' || Math.abs(a.v - b.v) < 2.2 || b.v < 1.6);
+    return d < (a.T.L + b.T.L) * 0.5 + 14 && (b.state === 'struck' || Math.abs(a.v - b.v) < 3 || b.v < 2.2);
   };
   G.board = (a, b) => {
     if (!G.canBoard(a, b)) return false;
@@ -501,13 +511,13 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const k = 1 - Math.exp(-dt * 1.4);
     b.x += (tx - b.x) * k; b.z += (tz - b.z) * k; b.psi = wrap(b.psi + wrap(a.psi - b.psi) * k);
     b.v *= 0.9; a.v *= 0.95;
-    if (B.t > 0.6 && Math.floor(B.t * 7) !== Math.floor((B.t - dt) * 7)) {
+    if (B.t > 0.3 && Math.floor(B.t * 9) !== Math.floor((B.t - dt) * 9)) {
       const u = (rnd() - 0.5) * Math.min(a.T.L, b.T.L) * 0.6;
       const p = new THREE.Vector3((a.x + b.x) / 2 + Math.cos(a.psi) * u, a.T.dMain + 1.6, (a.z + b.z) / 2 - Math.sin(a.psi) * u);
       fx.skirmish(p, G.t);
       emit('melee', p);
     }
-    if (B.t > 3.6) {
+    if (B.t > 2.2) {
       const win = B.roll < B.p;
       const lossA = Math.round(a.crew * (win ? 0.05 + 0.1 * (1 - B.p) : 0.25)), lossB = Math.round(b.crew * (win ? 0.6 : 0.2));
       a.crew = Math.max(4, a.crew - lossA); b.crew = Math.max(0, b.crew - lossB);
@@ -835,7 +845,30 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     s.destPort = to.id; s.dest = to.exit; s.path = route(s.x, s.z, ...to.exit); s.wp = 0;
   }
   G.spawnTraffic = spawnTraffic;
+  // there is always a prize in reach: with no merchant within 500 m for 25 s, one appears about 400 m off,
+  // sailing across your bow (never in port, never during the trailer)
+  function prizeNear(cross) {
+    const p = G.player;
+    for (let k = 0; k < 8; k++) {
+      const a = p.psi + (rnd() - 0.5) * 1.6, r = 360 + rnd() * 80, x = p.x + Math.cos(a) * r, z = p.z - Math.sin(a) * r;
+      if (!isWater(x, z, -6)) continue;
+      const s = spawnTraffic('merchant', [x, z]);
+      const h = p.psi + (rnd() < 0.5 ? 1 : -1) * Math.PI / 2; // across the bow
+      s.psi = h; s.path = [[x + Math.cos(h) * 900, z - Math.sin(h) * 900]]; s.wp = 0; s.dest = s.path[0];
+      if (cross) say('Sail ho! A ' + NATIONS[s.nation].adj + ' ' + s.C.name.toLowerCase() + ', the ' + s.name + ', off the bow.', 'info');
+      return s;
+    }
+    return null;
+  }
+  G.prizeNear = prizeNear;
+  function director(dt) {
+    if (G.attract || G.docked || G.docking) return;
+    const p = G.player, near = G.ships.some(o => o.alive && o.role === 'merchant' && !o.looted && !o.prize && o.state !== 'sinking' && Math.hypot(o.x - p.x, o.z - p.z) < 500);
+    G.quietT = near ? 0 : (G.quietT || 0) + dt;
+    if (G.quietT > 25) { G.quietT = 0; prizeNear(true); }
+  }
   function populate(dt) {
+    director(dt);
     G.spawnT = (G.spawnT || 0) - dt;
     if (G.spawnT > 0) return;
     G.spawnT = 4;
@@ -855,7 +888,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const P = G.player;
     if (s.state === 'struck') {
       steerTo(s, s.psi); s.sailSet = 0;
-      if (G.t - s.struckT > 50 && !(G.boarding)) { s.state = 'flee'; s.sailSet = 1; s.mesh.setFlag(LIVERIES[s.nation].flag); }
+      if (G.t - s.struckT > 90 && !(G.boarding)) { s.state = 'flee'; s.sailSet = 1; s.mesh.setFlag(LIVERIES[s.nation].flag); }
       return;
     }
     if (s.boss) { bossThink(s); return; }
@@ -1163,6 +1196,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     if (G.paused || G.loot && !G.autopilot) return;
     G.t += dt; G.phase = (G.phase + dt * G.daySpeed) % 1;
     stepWind(dt);
+    G.waveT = (G.waveT || 0) - dt; if (G.waveT <= 0) { G.waveT = 0.5; G.waveAmp = lookAt(G.phase, G.weather).wave; } // the sea the sim floats ships on
     stepMarkets(dt);
     ladder.step(dt);
     serpent.step(dt);
@@ -1183,7 +1217,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     separate();
     stepBalls(dt);
     for (const s of [...G.ships]) checkStates(s, dt);
-    for (const s of G.ships) place(s); // keep hulls, muzzles and lanterns in step with the simulation
+    for (const s of G.ships) place(s, true); // keep hulls, muzzles and lanterns in step with the simulation
     if (!G.attract) populate(dt); else populateAttract(dt);
     // player loss
     if (G.sinking && G.t - G.sinking.t > 7) {
@@ -1292,6 +1326,7 @@ export function createGame({ scene, U, fx, seed = 7 }) {
     const p = spawn({ id: 'player', cls: 'sloop', nation: 'pirate', role: 'player', name: 'Black Tide', x: 40, z: 60, psi: 1.2, v: 3, seed: 3 });
     G.player = p; G.autopilot = false; G.attract = false;
     for (let i = 0; i < 5; i++) spawnTraffic('merchant');
+    prizeNear(false); // your first prize is in sight from the start
     G.placeAll();
   };
   G.takeHelm = () => {
